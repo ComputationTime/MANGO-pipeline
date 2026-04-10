@@ -1,0 +1,9 @@
+trained_models/
+*__pycache__/
+analysis/
+archive/
+
+*test.py
+*config.py
+
+utils/configs.py
