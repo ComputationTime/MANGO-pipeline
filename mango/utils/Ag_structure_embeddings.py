@@ -13,6 +13,7 @@ from mango.utils.MPNN_embeddings import *
 from pyrosetta import *
 
 # Note, I still don't have the full set up for ESM-IF and AF-M, so please ignore those for now!
+# Note, I broke PyRosetta.... I will fix this later
 class Ag_embeddings(nn.Module):
     def __init__(self, method):
         """
@@ -27,40 +28,46 @@ class Ag_embeddings(nn.Module):
         self.method = method
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    def embed(self, structures, mpnn_type='vanilla_models', noise=2, bb_perturbation=0.0):
+    def embed(self, pdb_path, mpnn_type='vanilla_models', noise=2, bb_perturbation=0.0):
         parser = PDBParser(QUIET=True)
         ppb = PPBuilder()
 
-        SEQUENCES = [] # Just a dummy sequence to initialize the list, will be overwritten by real sequences from the structures
-        for pdb_path in structures:
-            parsed = parser.get_structure('antigen', pdb_path)
-            for pp in ppb.build_peptides(parsed):
-                SEQUENCES.append(pp.get_sequence())
+        ag_chains = ['A', 'B'] # Might need to use set later in case of duplicates
 
-        self.L_MAX = max([len(seq) for seq in SEQUENCES])
+        SEQUENCES = {}
+        parsed = parser.get_structure('antigen', pdb_path) # FIX LATER, MAKE THIS A STRING INSTEAD OF A LIST
+        for pp in ppb.build_peptides(parsed):
+            chain_id = pp[0].get_parent().id 
+            if chain_id in ag_chains: # No need to save all the useless chains
+                SEQUENCES[chain_id] = pp.get_sequence()
 
-        if self.method == "One_hot": # Sequence based --> (B, Lmax, 20)
+
+        self.L_MAX = 100 #max([len(seq) for seq in SEQUENCES])
+
+        # For all methods L* = sum(chain lens) + n_chain breaks except Biophysics which has GLOBAL properties
+
+        if self.method == "One_hot": # Sequence based --> (1, L*, 20)
             return self.One_hot(SEQUENCES)
 
-        elif self.method[:4] == "ESM2": # Sequence based --> (B, Lmax+2, Hdim) where Hdim depends on the ESM2 model used
+        elif self.method[:4] == "ESM2": # Sequence based --> (B, L*, Hdim) where Hdim depends on the ESM2 model used
             return self.ESM2(SEQUENCES)
         
         elif self.method == "ESMIF": # Structure based
-            return self.ESMIF(structures)
+            return self.ESMIF(pdb_path)
         
         elif self.method == "ProteinMPNN": # Structure based --> (B, Lmax+2, 1280)
-            return self.ProteinMPNN(structures, mpnn_model=mpnn_type, noise=noise, bb_perturbation=bb_perturbation)
+            return self.ProteinMPNN(pdb_path, mpnn_model=mpnn_type, noise=noise, bb_perturbation=bb_perturbation)
         
         elif self.method == "AFM": # Structure based
-            return self.AFM(structures)
+            return self.AFM(pdb_path)
         
         elif self.method == "ESM3": # Sequence + Structure based --> (B, Lmax+2, )
-            return self.ESM3(structures)
+            return self.ESM3(pdb_path)
         
         elif self.method == "PyRosetta_PRE": # Structure based --> (B, Lmax, 1) since PRE is a per-residue feature
-            return self.PyRosetta_PRE(structures)
+            return self.PyRosetta_PRE(pdb_path, ag_chains)
         
-        elif self.method == "Biophysics": # Sequence based --> (B, 1, 11) since biophysical features are global sequence properties (could technically repeat across seq len)
+        elif self.method == "Biophysics": # Sequence based --> (B, N_chains+breaks, 11) since biophysical features are global sequence properties (could technically repeat across seq len)
             return self.Biophysics(SEQUENCES)
         else:
             raise ValueError("Invalid embedding method")
@@ -69,23 +76,20 @@ class Ag_embeddings(nn.Module):
         """
         Simple one-hot encoding representations of the Antigen sequence.
         Args: 
-            sequences (list of str): List of antigen sequences.
+            sequences (dict): Given an Antigen pdb, it is formatted as {"chain": Seq, "chain": Seq, ...}
         Returns:
-            torch.Tensor: A tensor of shape (num_structures, max_sequence_length, 20)
+            torch.Tensor: A tensor of shape (1, max_sequence_length, 20) [batch size is always 1 antigen at a time]
         """
 
-        VOCAB = "ACDEFGHIKLMNPQRSTVWY"
+        VOCAB = "|ACDEFGHIKLMNPQRSTVWY"
+        full_seq = "|".join(str(seq) for seq in sequences.values()) 
 
-        ALL_MATRICES = []
-        for seq in sequences:
-            ENCODE_MATRIX = np.zeros((self.L_MAX, len(VOCAB))) # initialize to all 0s (PAD later)
-            for i, aa in enumerate(seq):
-                if aa in VOCAB: # Just in case there are non-standard AAs
-                    ENCODE_MATRIX[i, VOCAB.index(aa)] = 1
-
-            ALL_MATRICES.append(ENCODE_MATRIX)
-
-        return torch.from_numpy(np.array(ALL_MATRICES)).float()
+        ENCODE_MATRIX = torch.zeros((len(full_seq), len(VOCAB))) # initialize to all 0s (PAD later)
+        for i, aa in enumerate(full_seq):
+            if aa in VOCAB: # Just in case there are non-standard AAS 
+                ENCODE_MATRIX[i, VOCAB.index(aa)] = 1.0
+        
+        return ENCODE_MATRIX.unsqueeze(0)
 
     def ESM2(self, sequences): # https://github.com/facebookresearch/esm?tab=readme-ov-file#quickstart
         """
@@ -125,7 +129,8 @@ class Ag_embeddings(nn.Module):
         batch_converter = alphabet.get_batch_converter()
         model.to(self.device).eval() # disables dropout for deterministic results
 
-        data = [(f"protein_{i}", seq) for i, seq in enumerate(sequences)] # ESM2 format: list of tuples (protein_id, sequence)
+        data = [(chain, seq) for chain, seq in zip(sequences.keys(), sequences.values())] # ESM2 format: list of tuples (protein_id, sequence)
+        lens = [len(s) for s in sequences.values()]
         batch_labels, batch_strs, batch_tokens = batch_converter(data)
 
         with torch.no_grad():
@@ -133,9 +138,13 @@ class Ag_embeddings(nn.Module):
                 batch_tokens.to(self.device),
                 repr_layers=[last_layer],
                 return_contacts=False
-            )
+            ) # Padding shouldn't matter because ESM SHOULD have its attention mask ignoring the pad tokens
 
-        return results["representations"][last_layer]
+            # Keep all <cls> tokens from each sequence, but remove the ending one
+            embeddings = results["representations"][last_layer][:,:-1,:] # Keep all <cls> tokens, Remove special tokens at end
+            l_of_embs = [emb[:l+1, :] for emb, l in zip(embeddings, lens)]
+            
+        return torch.cat(l_of_embs, dim=0)[1:,:].unsqueeze(0) # 1 x Lsum x V (remove the first CLS, so it is treated as a sep chain)
 
     def ESMIF(self, structures): # https://colab.research.google.com/github/facebookresearch/esm/blob/master/examples/inverse_folding/notebook_multichain.ipynb#scrollTo=99d74757
         """
@@ -229,7 +238,7 @@ class Ag_embeddings(nn.Module):
 
         return torch.stack(EMBEDDINGS) # Shape: (num_structures, Lmax+2, 1536)
 
-    def PyRosetta_PRE(self, structures):
+    def PyRosetta_PRE(self, structure, ag_chains):
         """
         NOTE: WILL NEED A SEPARATE ENVIRONMENT FOR THIS SINCE PYROSETTA MAY NOT BE COMPATIBLE WITH THE OTHER PACKAGES
         Uses PyRosetta to get a per residue energy (PRE) score for each residue in the antigen. 
@@ -239,20 +248,29 @@ class Ag_embeddings(nn.Module):
         Returns:
             torch.Tensor: A tensor of shape (num_structures, Lmax, 1) since PRE is a per-residue feature.
         """
-        pyrosetta.init("-mute all", silent=True)
+        #from pyrosetta.toolbox import cleanATOM
+
+        #cleanATOM(structure)
+        #clean_path = structure.replace(".pdb", ".clean.pdb")
+        #pyrosetta.init("-mute all", silent=True)
+        pyrosetta.init("-mute all -ignore_unrecognized_res 1 -load_PDB_components false", silent=True)
 
         score_fxn = pyrosetta.get_score_function(True)
         #per_res_sasa_metric = pyrosetta.rosetta.core.simple_metrics.per_residue_metrics.PerResidueSasaMetric()
         per_res_energy_metric = pyrosetta.rosetta.core.simple_metrics.per_residue_metrics.PerResidueEnergyMetric()
 
-        EMBEDDINGS = []
-        for structure in structures:
-            pose = pyrosetta.pose_from_pdb(structure)
-            pre = list(per_res_energy_metric.calculate(pose).values()) # List of PRE values for each residue in the antigen
-            pre += [0] * (self.L_MAX - len(pre)) # Pad to L_MAX with 0s, since PRE is a per-residue feature
-            EMBEDDINGS.append(torch.tensor(pre).unsqueeze(1)) # Shape: Lmax x 1
+        pose = pyrosetta.pose_from_pdb(structure)
+        pre = per_res_energy_metric.calculate(pose)
+        chain_energies = [
+            energy for res_idx, energy in pre.items()
+            if pose.pdb_info().chain(res_idx) in ag_chains
+        ]
 
-        return torch.stack(EMBEDDINGS).to(self.device)
+        #pre = list(per_res_energy_metric.calculate(pose).values()) # List of PRE values for each residue in the antigen
+        #pre += [0] * (self.L_MAX - len(pre)) # Pad to L_MAX with 0s, since PRE is a per-residue feature
+        #EMBEDDINGS.append(torch.tensor(pre).unsqueeze(1)) # Shape: Lmax x 1
+
+        #return torch.stack(EMBEDDINGS).to(self.device)
 
     def Biophysics(self, sequences):
         """
@@ -260,17 +278,18 @@ class Ag_embeddings(nn.Module):
         molecular weight, aromaticity (% [Phe+Trp+Tyr]), instability index, gravy hydrophobicity, isoelectric point, 
         charge at pH 7.2, % helix, % turns, % sheet, and molar extinction coefficient for Cys and Cys-Cys bonds.
         Args: 
-            sequences (list of str): List of antigen sequences.
+            sequences (dict): Given an Antigen pdb, it is formatted as {"chain": Seq, "chain": Seq, ...}
         Returns:
             torch.Tensor: A tensor of shape (num_structures, 1, 11) 
             NOTE: Biophysical features are global properties of the sequence, so we can just repeat them across the sequence length dimension.
         """
         
-        PROPERTIES = ["aromaticity", "instability_index", "isoelectric_point", "secondary_structure_fraction", "gravy", "flexibility"]
+        PROPERTIES = ["aromaticity", "instability_index", "gravy", "isoelectric_point", "charge_at_pH", "secondary_structure_fraction", "flexibility"]
+        CH_BRK = [0]*11 # Biophysical properties
         PRECISION = 4
-
+        
         ALL_MATRICES = []
-        for seq in sequences:
+        for i, seq in enumerate(sequences.values()):
             X = ProteinAnalysis(str(seq))
             properties = [
                 X.molecular_weight(), # Keep, Ags can be anywhere from 10s to 1000s of AAs so this may fluctuate and provides insight into size
@@ -282,18 +301,22 @@ class Ag_embeddings(nn.Module):
                 X.charge_at_pH(7.2), # Close to physiological pH, which is relevant for antibody-antigen interactions
             ] # aliphatic index
 
-            properties += list(X.secondary_structure_fraction()) # Helix, Turn, Sheet fractions
+            properties += list(X.secondary_structure_fraction()) # Helix, Turn, Sheet fractions (CRAZY TYPO HERE)
             properties += list(X.molar_extinction_coefficient()) # for Cys, and Cys-Cys bond
 
             properties = [round(prop, PRECISION) for prop in properties] # Round all properties to 4 decimal places for consistency
             ALL_MATRICES.append(properties)
-        ALL_MATRICES = np.array(ALL_MATRICES)
-        ALL_MATRICES = np.expand_dims(ALL_MATRICES, axis=1)
-        return torch.from_numpy(ALL_MATRICES).float().to(self.device)
+
+            if len(sequences)>1 and (i+1)<len(sequences):
+                ALL_MATRICES.append(CH_BRK)
+        
+        embeddings = torch.tensor(ALL_MATRICES)
+        return embeddings.unsqueeze(0)
         
         
 # ESM-IF, AF-M, ESM3 (DONE, BUT NEED SEP ENVIRONMENT)
-#embedder = Ag_embeddings(method="ProteinMPNN")
-#structures = ["Penta_Alanine_Antigen.pdb", "Penta_Alanine_Antigen.pdb"]
-#embeddings = embedder.embed(structures)
+embedder = Ag_embeddings(method="One_hot")
+#structure = "Penta_Alanine_Antigen.pdb"
+structure = '/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb'
+embeddings = embedder.embed(structure)
 #print(embeddings.shape)

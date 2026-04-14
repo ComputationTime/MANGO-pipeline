@@ -1,10 +1,11 @@
-# FIX TOKENIZER + VALIDATE_SEQUENCE + FIX HOT / COLD SPOTS
+# FIX WHICH CHAIN IS CALLED + FIX HOT / COLD SPOTS
 import os
 import sys
 
 import torch
 import torch.nn as nn
 import transformers
+from transformers import GPT2LMHeadModel
 from tqdm import tqdm
 
 import mango
@@ -27,6 +28,16 @@ CHECKPOINT_DICT = {
     "MANGO-S": os.path.join(trained_models_dir, 'MANGO-S'),
 }
 #ABLANG2_VOCAB_FILE = os.path.join(project_path, 'utils/Ablang2_vocab.txt')
+
+configs = transformers.GPT2Config(
+    vocab_size=26, # Should be 26
+    n_positions=2048,
+    n_layer=4,
+    n_head=8,
+    hidden_size=480
+    #hidden_dropout_prob=0.3, # Added dropout probability
+    #attention_probs_dropout_prob=0.3 # Added attention dropout probability
+) #12M parameters
 
 
 class EncodeInputs(nn.Module):
@@ -87,11 +98,10 @@ class MANGO():
 
     def __init__(self, ag_representation='One_hot', model_name="MANGO", n_cross_attn_heads=1, n_cross_attn_layers=1):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.tokenizer = transformers.BertTokenizer.from_pretrained('Exscientia/IgBert_unpaired', do_lower_case=False) # Same AbLM tokenizer avoids confusion
 
-        #self.tokenizer = transformers.AutoTokenizer.from_pretrained("hemantn/ablang2", trust_remote_code=True)
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained("hemantn/ablang2", trust_remote_code=True)
+        self.tokenizer.cls_token_id = 22 # from Ablang2 github
 
-        #configs = transformers.GPT2Config(vocab_size=30, hidden_size=144) # ValueError: `embed_dim` must be divisible by num_heads (got `embed_dim`: 128 and `num_heads`: 12).
         #self.model = transformers.GPT2LMHeadModel.from_pretrained(CHECKPOINT_DICT[model_name]).to(self.device)
 
         configs = transformers.GPT2Config(
@@ -107,7 +117,12 @@ class MANGO():
         #print(f"Total parameters: {total_params:,}")
 
 
-        self.encoder = EncodeInputs(configs.hidden_size, n_heads=n_cross_attn_heads, n_layers=n_cross_attn_layers, ag_representation=ag_representation)
+        self.encoder = EncodeInputs(
+            configs.hidden_size, 
+            n_heads=n_cross_attn_heads, 
+            n_layers=n_cross_attn_layers, 
+            ag_representation=ag_representation
+        )
     
     def _generate(self, input_embeddings, chains_to_generate, num_to_generate, top_p, temperature):
         decoded_seqs = set()  # Set to remove duplicates
@@ -126,23 +141,17 @@ class MANGO():
                 temperature=temperature
             ).detach().cpu().numpy() # Always (B,L_gen)
             
-            seq = seq[0] # Squeeze out batch dimension
-
-            if True: #validate_MANGO_seq(seq): # check token format (this is why IgLM takes slightly longer than traditional GPT!)
-
-                decoded_tokens = self.tokenizer.decode(seq[:-1]) # remove [CLS] at end
-                #print(decoded_tokens)
-
-                decoded_seq = ''.join(decoded_tokens).replace(' ', '')
-                #print(decoded_seq)
-                if decoded_seq not in decoded_seqs:
-                    decoded_seqs.add(decoded_seq)
-                    pbar.update(1)
+            decoded_tokens = self.tokenizer.decode(seq[0, :-1]) # Squeeze out batch dimension, remove [CLS] at end
+            #print(decoded_tokens)
+            decoded_seq = ''.join(decoded_tokens).replace(' ', '')
+            if decoded_seq not in decoded_seqs:
+                decoded_seqs.add(decoded_seq)
+                pbar.update(1)
         
         pbar.close()
         return list(decoded_seqs)
 
-    def generate(self, antigen_pdb_path, prompt_sequence=None, chains_to_generate='H', num_to_generate=10, top_p=1, temperature=1, ag_cold_spots=None, ag_hot_spots=None,): 
+    def generate(self, antigen_pdb_path, prompt_sequence='*', chains_to_generate='H', num_to_generate=1, top_p=1, temperature=1, ag_cold_spots=None, ag_hot_spots=None,): 
         '''
         Function to generate sequences from MANGO, an antigen conditioned autoregressive model. Only works
         for de novo only works with no prompt and infilling only withs with a template sequence. For 
@@ -151,7 +160,7 @@ class MANGO():
         Args: 
             1. antigen_pdb_path (str): The path to the antigen structure to condition generation 
             2. prompt_sequence (str): A single prompt sequence (either H or L)
-            3. chains_to_generate (str): 'H', 'L', or 'scFv'
+            3. chains_to_generate (str): 'H', 'L', or 'scFv'.[NOTE: scFv does not take a prompt sequence]
             4. num_to_generate (int): How many sequences to generate from the model 
             5. top_p (int): Maximum cdf to consider (from sum of token probability). [Compared to top_k]
             6. temperature (float): sampling temperature, higher is more even distribution 
@@ -162,14 +171,20 @@ class MANGO():
             generated_seqs: A list of generated sequences
         '''
 
-        if prompt_sequence==None and chains_to_generate=='H':
-            prompt_sequence = ['','*']
-        elif prompt_sequence==None and chains_to_generate=='L':
-            prompt_sequence = ['*','']
-        elif prompt_sequence==None and chains_to_generate=='scFv':
-            prompt_sequence = ['*','*']
+        if chains_to_generate=='H':
+            prompt_sequence = ['',prompt_sequence]
+        elif chains_to_generate=='L':
+            prompt_sequence = [prompt_sequence,'']
+        elif prompt_sequence=='*' and chains_to_generate=='scFv':
+            prompt_sequence = [prompt_sequence,'']
 
-        chain_aware_embeddings = self.encoder(antigen_pdb_path=antigen_pdb_path, ab_seq_context=prompt_sequence, chain=chains_to_generate, ag_cold_spots=ag_cold_spots, ag_hot_spots=ag_hot_spots)
+        chain_aware_embeddings = self.encoder(
+            antigen_pdb_path=antigen_pdb_path, 
+            ab_seq_context=prompt_sequence, 
+            chain=chains_to_generate, 
+            ag_cold_spots=ag_cold_spots, 
+            ag_hot_spots=ag_hot_spots
+        )
         
         return self._generate(
             input_embeddings=chain_aware_embeddings, 
@@ -206,12 +221,12 @@ class MANGO():
         return lls
 
 
-model = MANGO()
+#model = MANGO()
 #model._check_IgBERT_vocab()
 
 # De novo generation (Ideally want 1 Ag, 1 sequence?)
-# list_of_de_novo_seqs = model.generate(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/0_EXP_DATA/AbYBank/LH_Protein_Chothia_3000/1A2Y_1.pdb'])
-list_of_de_novo_seqs = model.generate(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/MANGO/mango/utils/Penta_Alanine_Antigen.pdb'])
+#list_of_de_novo_seqs = model.generate(antigen_pdb_path='/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb')
+#list_of_de_novo_seqs = model.generate(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/MANGO/mango/utils/Penta_Alanine_Antigen.pdb'])
 #model.log_likelihood(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/MANGO/mango/utils/Penta_Alanine_Antigen.pdb'])
 #print(list_of_de_novo_seqs)
 

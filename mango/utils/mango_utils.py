@@ -1,10 +1,10 @@
 import numpy as np 
 
-# <, -, >, *, X, |
-BAD_WORD_IDS = [[0], [21], [22], [23], [24], [25],]
+# <, -, *, X, |
+BAD_WORD_IDS = [[0], [21], [23], [24], [25],]
 
 MODEL_TO_HDIM = {
-    "One_hot":20,
+    "One_hot":21,
     "ESM2_t48_15B":5120,
     "ESM2_t36_3B":2560, 
     "ESM2_t33_650M":1280, 
@@ -27,6 +27,37 @@ mapping_chains = {
     "VL-only":"L",
 }
 
+ablang_vocab = {
+    "<": 0,    # Start token
+    "-": 21,   # Padding token
+    ">": 22,   # End token
+    "*": 23,   # Mask token
+    "X": 24,   # Unknown (residue) token
+    "|": 25,   # Separation (of heavy and light chain) token
+    "M": 1, 
+    "R": 2, 
+    "H": 3, 
+    "K": 4, 
+    "D": 5, 
+    "E": 6, 
+    "S": 7, 
+    "T": 8, 
+    "N": 9, 
+    "Q": 10, 
+    "C": 11,
+    "G": 12, 
+    "P": 13, 
+    "A": 14, 
+    "V": 15, 
+    "I": 16, 
+    "F": 17, 
+    "Y": 18, 
+    "W": 19, 
+    "L": 20,
+}
+
+ablang_decode = {i:j for j,i in ablang_vocab.items()}
+
 def mask_span(seq, start, end, append_span = False):
     masked_seq = seq[:start] + ['[MASK]'] + seq[end:] + ['[SEP]']
     if append_span:
@@ -38,10 +69,14 @@ def mask_span(seq, start, end, append_span = False):
 def validate_MANGO_seq(input_ids):
     """ Validate that generated input ids are well formed ( if H,L no [SEP] else only 1 [CLS]) """
 
-    # scFv:   [CHAIN][AG-INFORMED EMBEDDINGS] [E V Q] [SEP] [L V E S S] [CLS]
+    # scFv:   [CHAIN][AG-INFORMED EMBEDDINGS] [E V Q L V E S S] [CLS]
     # H or L: [CHAIN][AG-INFORMED EMBEDDINGS] [E V Q ... V E S S] [CLS]
-    cls_idx = np.where(input_ids == self.tokenizer.cls_token_id)[0] # (positions, dtype)
-    sep_idx = np.where(input_ids == self.tokenizer.sep_token_id)[0]
+    cls_idx = np.where(input_ids == 22)[0] # (positions, dtype)
+    sep_idx = np.where(input_ids == 25)[0]
+
+    #mask_idx = np.where(input_ids == tokenizer.mask_token_id)[0] # Because he brings it back around front... so I actually don't need this 
+    #sep_idx = np.where(input_ids == tokenizer.sep_token_id)[0]
+    #cls_idx = np.where(input_ids == tokenizer.cls_token_id)[0]
 
     if len(mask_idx) != 1 or len(sep_idx) != 3 or len(cls_idx) != 1:
         return False # Needs one of each
