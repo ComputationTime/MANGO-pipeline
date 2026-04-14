@@ -1,7 +1,7 @@
 # MANGO
 Official repository for MANGO - a multi-modal, autoregressive antibody-specific language model that generates and scores conditioned on antigen context, as described in [PAPER](https://www.google.com)
 
-![Model Logo](mango/utils/images/MANGO_2.png)
+![Model Logo](mango/utils/images/MANGO.png)
 
 ## Setup 
 To use MANGO, install via pip: 
