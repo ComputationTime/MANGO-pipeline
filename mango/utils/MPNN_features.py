@@ -56,21 +56,13 @@ def parse_PDB_biounits(x, atoms=['N','CA','C'], chain=None):
         else: 
             resa,resn = "",int(resn)-1
 #         resn = int(resn)
-        if resn < min_resn: 
-            min_resn = resn
-        if resn > max_resn: 
-            max_resn = resn
-        if resn not in xyz: 
-            xyz[resn] = {}
-        if resa not in xyz[resn]: 
-            xyz[resn][resa] = {}
-        if resn not in seq: 
-            seq[resn] = {}
-        if resa not in seq[resn]: 
-            seq[resn][resa] = resi
-
-        if atom not in xyz[resn][resa]:
-          xyz[resn][resa][atom] = np.array([x,y,z])
+        if resn < min_resn: min_resn = resn
+        if resn > max_resn: max_resn = resn
+        if resn not in xyz: xyz[resn] = {}
+        if resa not in xyz[resn]: xyz[resn][resa] = {}
+        if resn not in seq: seq[resn] = {}
+        if resa not in seq[resn]: seq[resn][resa] = resi
+        if atom not in xyz[resn][resa]: xyz[resn][resa][atom] = np.array([x,y,z])
 
   # convert to numpy arrays, fill in missing values
   seq_,xyz_ = [],[]
@@ -86,7 +78,18 @@ def parse_PDB_biounits(x, atoms=['N','CA','C'], chain=None):
               else: xyz_.append(np.full(3,np.nan))
         else:
           for atom in atoms: xyz_.append(np.full(3,np.nan))
-      return np.array(xyz_).reshape(-1,len(atoms),3), N_to_AA(np.array(seq_))
+        
+        ####################################################################################
+        xyz_array = np.array(xyz_).reshape(-1, len(atoms), 3)
+        seq_array = np.array(seq_)
+
+        # Remove residues where ANY atom is NaN, and the corresponding GAP (-) in sequence
+        valid_mask = ~np.any(np.isnan(xyz_array), axis=(1, 2))
+        xyz_array = xyz_array[valid_mask]
+        seq_array = seq_array[valid_mask]
+        ####################################################################################
+
+      return xyz_array, N_to_AA(seq_array.reshape(1, -1)) #np.array(xyz_).reshape(-1,len(atoms),3), N_to_AA(np.array(seq_))
   except TypeError:
       return 'no_chain', 'no_chain'
 
@@ -106,11 +109,7 @@ def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False):
         my_dict = {}
         s = 0
         concat_seq = ''
-        concat_N = []
-        concat_CA = []
-        concat_C = []
-        concat_O = []
-        concat_mask = []
+        concat_N, concat_CA, concat_C, concat_O, concat_mask = [], [], [], [], []
         coords_dict = {}
         for letter in chain_alphabet:
             if ca_only:
@@ -140,7 +139,7 @@ def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False):
             c+=1
     return pdb_dict_list
 
-def tied_featurize_minimal(batch, device, chain_dict, ca_only=False):
+def tied_featurize_minimal(batch, device, ca_only=False):
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     B = len(batch)
     L_max = max([len(b['seq']) for b in batch])
@@ -156,21 +155,14 @@ def tied_featurize_minimal(batch, device, chain_dict, ca_only=False):
 
     for i, b in enumerate(batch):
         # Chain sorting now INSIDE the main loop
-        if chain_dict != None:
-            masked_chains, visible_chains = chain_dict[b['name']]
-        else:
-            masked_chains = [item[-1:] for item in list(b) if item[:10]=='seq_chain_']
-            visible_chains = []
+        masked_chains = [item[-1:] for item in list(b) if item[:10]=='seq_chain_']
+        visible_chains = []
         masked_chains.sort()
         visible_chains.sort()
         all_chains = masked_chains + visible_chains
 
-        x_chain_list = []
-        chain_seq_list = []
-        chain_encoding_list = []
-        c = 1
-        l0 = 0
-        l1 = 0
+        x_chain_list, chain_seq_list, chain_encoding_list = [], [], []
+        c, l0, l1 = 1, 0, 0
 
         for step, letter in enumerate(all_chains):
             if letter in visible_chains or letter in masked_chains:

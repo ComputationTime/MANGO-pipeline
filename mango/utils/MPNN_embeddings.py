@@ -1,30 +1,15 @@
-import re, os, json, time, sys, glob, copy
-import os.path
-
+import os
+import copy
 import random
 import numpy as np
 
 import torch 
 import torch.nn as nn
-from torch import optim
 import torch.nn.functional as F
-
 
 from mango.utils.MPNN_utils import *
 from mango.utils.MPNN_features import *
 
-
-
-##########################################
-
-
-import matplotlib.pyplot as plt
-import shutil
-import warnings
-#from torch.utils.data import DataLoader
-#from torch.utils.data.dataset import random_split, Subset
-#from protein_mpnn_utils import gather_edges, gather_nodes, gather_nodes_t, cat_neighbors_nodes, _scores, _S_to_seq, tied_featurize, parse_PDB
-#from protein_mpnn_utils import StructureDataset, StructureDatasetPDB, ProteinMPNN
 
 ca_models = '/weka/scratch/jgray21/dvincen9/learning/ProteinMPNN/ca_model_weights'
 vanilla_models = '/weka/scratch/jgray21/dvincen9/learning/ProteinMPNN/vanilla_model_weights'
@@ -35,6 +20,7 @@ CHECKPOINTS = {
         2:os.path.join(ca_models, 'v_48_002.pt'),
         10:os.path.join(ca_models, 'v_48_010.pt'),
         20:os.path.join(ca_models, 'v_48_020.pt'),
+        30:os.path.join(ca_models, 'v_48_020.pt'),
     },
 
     "vanilla_models": {
@@ -53,86 +39,6 @@ CHECKPOINTS = {
 
 }
 
-#print(CHECKPOINTS["vanilla_models"][2])
-
-def tied_featurize(batch, device, chain_dict, ca_only=False):
-    alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
-    B = len(batch)
-    L_max = max([len(b['seq']) for b in batch])
-    
-    if ca_only:
-        X = np.zeros([B, L_max, 1, 3])
-    else:
-        X = np.zeros([B, L_max, 4, 3])
-
-    residue_idx = -100 * np.ones([B, L_max], dtype=np.int32)
-    chain_encoding_all = np.zeros([B, L_max], dtype=np.int32)
-    S = np.zeros([B, L_max], dtype=np.int32)
-
-    for i, b in enumerate(batch):
-        if chain_dict is not None:
-            masked_chains, visible_chains = chain_dict[b['name']]
-        else:
-            masked_chains = [item[-1:] for item in list(b) if item[:10] == 'seq_chain_']
-            visible_chains = []
-        masked_chains.sort()
-        visible_chains.sort()
-        all_chains = masked_chains + visible_chains
-
-        x_chain_list, chain_seq_list, chain_encoding_list = [], [], []
-        c, l0, l1 = 1, 0, 0
-
-        for letter in all_chains:
-            chain_seq = b[f'seq_chain_{letter}']
-            chain_seq = ''.join([a if a != '-' else 'X' for a in chain_seq])
-            chain_length = len(chain_seq)
-            chain_coords = b[f'coords_chain_{letter}']
-
-            if ca_only:
-                x_chain = np.array(chain_coords[f'CA_chain_{letter}'])
-                if len(x_chain.shape) == 2:
-                    x_chain = x_chain[:, None, :]
-            else:
-                x_chain = np.stack([chain_coords[c] for c in [
-                    f'N_chain_{letter}', f'CA_chain_{letter}',
-                    f'C_chain_{letter}', f'O_chain_{letter}'
-                ]], 1)
-
-            x_chain_list.append(x_chain)
-            chain_seq_list.append(chain_seq)
-            chain_encoding_list.append(c * np.ones(chain_length))
-            l1 += chain_length
-            residue_idx[i, l0:l1] = 100 * (c - 1) + np.arange(l0, l1)
-            l0 += chain_length
-            c += 1
-
-        x = np.concatenate(x_chain_list, 0)
-        all_sequence = "".join(chain_seq_list)
-        chain_encoding = np.concatenate(chain_encoding_list, 0)
-        l = len(all_sequence)
-
-        x_pad = np.pad(x, [[0, L_max - l], [0, 0], [0, 0]], 'constant', constant_values=(np.nan,))
-        X[i, :, :, :] = x_pad
-
-        chain_encoding_pad = np.pad(chain_encoding, [[0, L_max - l]], 'constant', constant_values=(0.0,))
-        chain_encoding_all[i, :] = chain_encoding_pad
-
-        indices = np.asarray([alphabet.index(a) for a in all_sequence], dtype=np.int32)
-        S[i, :l] = indices
-
-    isnan = np.isnan(X)
-    mask = np.isfinite(np.sum(X, (2, 3))).astype(np.float32)
-    X[isnan] = 0.
-
-    residue_idx = torch.from_numpy(residue_idx).to(dtype=torch.long, device=device)
-    S = torch.from_numpy(S).to(dtype=torch.long, device=device)
-    X = torch.from_numpy(X).to(dtype=torch.float32, device=device)
-    mask = torch.from_numpy(mask).to(dtype=torch.float32, device=device)
-    chain_encoding_all = torch.from_numpy(chain_encoding_all).to(dtype=torch.long, device=device)
-
-    return X, S, mask, chain_encoding_all, residue_idx
-
-    
 class ProteinMPNN_Encoder(nn.Module):
     '''
     Goal: input should just be model = 'ca_models', 'vanilla_models', 'soluble_models' --> Then the class should handle the rest
@@ -155,7 +61,9 @@ class ProteinMPNN_Encoder(nn.Module):
         print(f'This ProteinMPNN model was trained with: {checkpoint["noise_level"]}Å noise')
         hidden_dim = checkpoint['model_state_dict']['features.edge_embedding.weight'].shape[0]
 
-        self.str_model = self._load_ProteinMPNN(
+        self.ca_only = True if model=='ca_models' else False
+
+        self._load_ProteinMPNN(
             num_letters=21, 
             node_features=hidden_dim, 
             edge_features=hidden_dim,
@@ -166,12 +74,8 @@ class ProteinMPNN_Encoder(nn.Module):
             k_neighbors=checkpoint['num_edges'], # 64?, 48
             augment_eps=bb_perturbation,
             dropout=0.1, 
-            ca_only=True
-        )
-
-        # FREEZE PROTEINMPNN WEIGHTS
-        #for param in self.str_model.parameters():
-        #    param.requires_grad = False
+            ca_only=self.ca_only
+        ) # Model weights are already frozen because they don't require grad
 
     def _load_ProteinMPNN(self, num_letters, node_features, edge_features,
         hidden_dim, num_encoder_layers=3, num_decoder_layers=3,
@@ -211,7 +115,6 @@ class ProteinMPNN_Encoder(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-
     def _encode(self, X, S, mask, residue_idx, chain_encoding_all):
         """ Graph-conditioned sequence model """
         device=X.device
@@ -228,25 +131,19 @@ class ProteinMPNN_Encoder(nn.Module):
         
         return h_V
     
-    def encode(self, antigen_pdb_path, ag_chains: str):
+    def encode(self, antigen_pdb_path, ag_chains, max_len=20000): # Max length from ProteinMPNN
+        
+        pdb_dict_list = parse_PDB(antigen_pdb_path, input_chain_list=ag_chains)
+        print(f"Using ProteinMPNN to encode {pdb_dict_list[0]['num_of_chains']} chains: {ag_chains}")
 
-        max_length = 20000 # From ProteinMPNN
-
-        ag_chain_list = re.sub("[^A-Za-z]+",",", ag_chains).split(",") # allows user to use any type of delimiter in the input chain string
-        pdb_dict_list = parse_PDB(antigen_pdb_path, input_chain_list=ag_chain_list)
-
-        chain_id_dict = {}
-        chain_id_dict[pdb_dict_list[0]['name']]= (ag_chain_list, []) # Was fixed chain list... but this is not necessary for this model
-
-        dataset_valid = StructureDatasetPDB(pdb_dict_list, truncate=None, max_length=max_length)
+        dataset_valid = StructureDatasetPDB(pdb_dict_list, truncate=None, max_length=max_len)
 
         with torch.no_grad():
             for ix, protein in enumerate(dataset_valid):
                 batch_clones = [copy.deepcopy(protein) for i in range(1)] # Always uses 1 antigen?
-                X, S, mask, chain_encoding_all, residue_idx,  = tied_featurize_minimal(batch_clones, self.device, chain_id_dict, ca_only=True)
+                X, S, mask, chain_encoding_all, residue_idx,  = tied_featurize_minimal(batch_clones, self.device, ca_only=self.ca_only)
 
         # X: (B, L, 3) --> embeddings: (B,L, H_dim)
-        
         embeddings = self._encode(X, S, mask, residue_idx, chain_encoding_all) # (1, L, 128)
 
         return embeddings

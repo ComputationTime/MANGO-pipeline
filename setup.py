@@ -26,7 +26,7 @@ setup(
         'einops', #0.8.0
         'torch>1.9',
         'numpy>1.9.0',
-        'transformers>4.5',
+        'transformers==4.57.2',
         'datasets>3.5.1',
         'accelerate>=0.26.0',
         'seaborn>=0.13.2',

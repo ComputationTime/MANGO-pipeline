@@ -94,9 +94,10 @@ class EncodeInputs(nn.Module):
             return chain_aware_embeddings
 
 
-class MANGO():
+class MANGO(nn.Module):
 
     def __init__(self, ag_representation='One_hot', model_name="MANGO", n_cross_attn_heads=1, n_cross_attn_layers=1):
+        super().__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.tokenizer = transformers.AutoTokenizer.from_pretrained("hemantn/ablang2", trust_remote_code=True)
@@ -159,13 +160,14 @@ class MANGO():
 
         Args: 
             1. antigen_pdb_path (str): The path to the antigen structure to condition generation 
-            2. prompt_sequence (str): A single prompt sequence (either H or L)
-            3. chains_to_generate (str): 'H', 'L', or 'scFv'.[NOTE: scFv does not take a prompt sequence]
-            4. num_to_generate (int): How many sequences to generate from the model 
-            5. top_p (int): Maximum cdf to consider (from sum of token probability). [Compared to top_k]
-            6. temperature (float): sampling temperature, higher is more even distribution 
-            7. ag_cold_spots (list of ints): Manually curated positions to ignore during cross attention
-            8. ag_hot_spots (list of ints): Manually curated positinos to highlight during cross attention
+            2. antigen_chains (list): The chain(s) in the PDB to use as antigen context (e.g. ['A'] or ['A','B'])
+            3. prompt_sequence (str): A single prompt sequence (either H or L)
+            4. chains_to_generate (str): 'H', 'L', or 'scFv'.[NOTE: scFv does not take a prompt sequence]
+            5. num_to_generate (int): How many sequences to generate from the model 
+            6. top_p (int): Maximum cdf to consider (from sum of token probability). [Compared to top_k]
+            7. temperature (float): sampling temperature, higher is more even distribution 
+            8. ag_cold_spots (list of ints): Manually curated positions to ignore during cross attention
+            9. ag_hot_spots (list of ints): Manually curated positinos to highlight during cross attention
 
         Returns:
             generated_seqs: A list of generated sequences

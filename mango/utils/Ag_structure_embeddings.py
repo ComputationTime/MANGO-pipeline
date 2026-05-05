@@ -13,76 +13,119 @@ from mango.utils.MPNN_embeddings import *
 from pyrosetta import *
 
 # Note, I still don't have the full set up for ESM-IF and AF-M, so please ignore those for now!
-# Note, I broke PyRosetta.... I will fix this later
 class Ag_embeddings(nn.Module):
-    def __init__(self, method):
+    def __init__(self, method, max_chains=10, L_max=1000):
         """
         Main MANGO class that lets the user choose how to represent the Antigen input: 
             method (str): One_hot, ESM2_t48_15B, ESM2_t36_3B, ESM2_t33_650M, ESM2_t30_150M, ESM2_t12_35M, ESM2_t6_8M,  
-            ESM-IF, ProteinMPNN, AF-M, ESM3, PyRosetta_PRE, Biophysics 
-
-        Functions:
-            embed(list of str paths to antigen pdb files) -> tensor(B, Lmax+2, H)
+            ESM-IF, ProteinMPNN (ca_models, vanilla_models, soluble_models), AF-M, ESM3, PyRosetta_PRE, Biophysics 
         """
         super().__init__()
         self.method = method
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.L_max = L_max
+        self.max_chains = max_chains
     
-    def embed(self, pdb_path, mpnn_type='vanilla_models', noise=2, bb_perturbation=0.0):
+    def embed(self, ag_pdb_path, ag_chains, mpnn_type='vanilla_models', noise=2, bb_perturbation=0.0):
+        """
+        Main function to choose how to represent the antigen before feeding to cross attention for the GPT head 
+
+        Args: 
+            - ag_pdb_path (str): The path to the pdb of the antigen 
+            - ag_chains (list): A list with chain identifiers to select which chains to embed
+            - mpnn_type (str): Optional, only use if using MPNN (ca_model, vanilla_model)
+            - noise (int): Optional, only use if using MPNN (...)
+            - bb_perturbation (float): Optional, only use if using MPNN (...)
+        
+        Returns:
+            - tensor(1, L*, H) [batch size is always 1 antigen at a time, even if multi chain]
+        
+        Hdims:
+            - One-Hot: 21 
+            - ESM2_t48_15B: 5120
+            - ESM2_t36_3B: 2560
+            - ESM2_t33_650M: 1280
+            - ESM2_t30_150M: 640
+            - ESM2_t12_35M: 480
+            - ESM2_t6_8M: 320
+            - ESM-IF:
+            - ProteinMPNN: 128
+            - AF-M:
+            - ESM3:
+            - PyRosetta_PRE: 1
+            - Biophysics: 11
+        """
+
+        #ag_chains = list(set(ag_chains)) # In case of duplicates
+        ag_chains = list(dict.fromkeys(ag_chains)) # To preserve order 
+        
         parser = PDBParser(QUIET=True)
         ppb = PPBuilder()
 
-        ag_chains = ['A', 'B'] # Might need to use set later in case of duplicates
-
         SEQUENCES = {}
-        parsed = parser.get_structure('antigen', pdb_path) # FIX LATER, MAKE THIS A STRING INSTEAD OF A LIST
+        parsed = parser.get_structure('antigen', ag_pdb_path)
+        
         for pp in ppb.build_peptides(parsed):
-            chain_id = pp[0].get_parent().id 
+            chain_id = pp[0].get_parent().id
             if chain_id in ag_chains: # No need to save all the useless chains
-                SEQUENCES[chain_id] = pp.get_sequence()
+                fragment = str(pp.get_sequence())
+                if chain_id in SEQUENCES:
+                    SEQUENCES[chain_id] += fragment  # concatenate fragments
+                else:
+                    SEQUENCES[chain_id] = fragment
+                
+
+        """
+        from collections import defaultdict
+
+        chain_residue_counts = defaultdict(int)
+        for i in range(1, pose.total_residue() + 1):
+            chain = pose.pdb_info().chain(i)
+            chain_residue_counts[chain] += 1
+
+        print(f"Total residues: {pose.total_residue()}")
+        print(f"Residues per chain: {dict(chain_residue_counts)}")
+        print(f"Sum of A+B: {chain_residue_counts['A'] + chain_residue_counts['B']}")
+        print(f"len(chain_energies): {len(chain_energies)}")
 
 
-        self.L_MAX = 100 #max([len(seq) for seq in SEQUENCES])
+        Total residues: 1117
+        Residues per chain: {'A': 218, 'B': 336, 'G': 54, 'R': 277, 'S': 232}
+        Sum of A+B: 554
+        len(chain_energies): 554
+        """
 
         # For all methods L* = sum(chain lens) + n_chain breaks except Biophysics which has GLOBAL properties
 
-        if self.method == "One_hot": # Sequence based --> (1, L*, 20)
+        if self.method == "One_hot": # Sequence based --> (1, L, 21)
             return self.One_hot(SEQUENCES)
 
-        elif self.method[:4] == "ESM2": # Sequence based --> (B, L*, Hdim) where Hdim depends on the ESM2 model used
+        elif self.method[:4] == "ESM2": # Sequence based --> (1, L, Hdim) where Hdim depends on the ESM2 model used
             return self.ESM2(SEQUENCES)
         
         elif self.method == "ESMIF": # Structure based
-            return self.ESMIF(pdb_path)
+            return self.ESMIF(ag_pdb_path)
         
         elif self.method == "ProteinMPNN": # Structure based --> (B, Lmax+2, 1280)
-            return self.ProteinMPNN(pdb_path, mpnn_model=mpnn_type, noise=noise, bb_perturbation=bb_perturbation)
+            return self.ProteinMPNN(ag_pdb_path, ag_chains=ag_chains, mpnn_model=mpnn_type, noise=noise, bb_perturbation=bb_perturbation)
         
         elif self.method == "AFM": # Structure based
-            return self.AFM(pdb_path)
+            return self.AFM(ag_pdb_path)
         
         elif self.method == "ESM3": # Sequence + Structure based --> (B, Lmax+2, )
-            return self.ESM3(pdb_path)
+            return self.ESM3(ag_pdb_path)
         
-        elif self.method == "PyRosetta_PRE": # Structure based --> (B, Lmax, 1) since PRE is a per-residue feature
-            return self.PyRosetta_PRE(pdb_path, ag_chains)
+        elif self.method == "PyRosetta_PRE": # Structure based --> (1, L, 1) since PRE is a per-residue feature
+            return self.PyRosetta_PRE(ag_pdb_path, ag_chains)
         
-        elif self.method == "Biophysics": # Sequence based --> (B, N_chains+breaks, 11) since biophysical features are global sequence properties (could technically repeat across seq len)
+        elif self.method == "Biophysics": # Sequence based --> (1, L, 11) will be EXTREMELY sparse, so need to use a different Lmax
             return self.Biophysics(SEQUENCES)
         else:
             raise ValueError("Invalid embedding method")
     
     def One_hot(self, sequences):
-        """
-        Simple one-hot encoding representations of the Antigen sequence.
-        Args: 
-            sequences (dict): Given an Antigen pdb, it is formatted as {"chain": Seq, "chain": Seq, ...}
-        Returns:
-            torch.Tensor: A tensor of shape (1, max_sequence_length, 20) [batch size is always 1 antigen at a time]
-        """
-
         VOCAB = "|ACDEFGHIKLMNPQRSTVWY"
-        full_seq = "|".join(str(seq) for seq in sequences.values()) 
+        full_seq = "|".join(str(seq) for seq in sequences.values()) # Debating if I add the chain break or nah
 
         ENCODE_MATRIX = torch.zeros((len(full_seq), len(VOCAB))) # initialize to all 0s (PAD later)
         for i, aa in enumerate(full_seq):
@@ -97,7 +140,7 @@ class Ag_embeddings(nn.Module):
         The default model is esm2_t33_650M_UR50D, which has 33 layers and 650 million parameters. Hdims are: 
         15B: 5120, 3B: 2560, 650M: 1280, 150M: 640, 35M: 480, 8M: 320
         Args: 
-            sequences (list of str): List of antigen sequences.
+            sequences: List of antigen sequences.
         Returns:
             torch.Tensor: A tensor of shape (num_structures, Lmax+2, 1280)
         """
@@ -143,10 +186,13 @@ class Ag_embeddings(nn.Module):
             # Keep all <cls> tokens from each sequence, but remove the ending one
             embeddings = results["representations"][last_layer][:,:-1,:] # Keep all <cls> tokens, Remove special tokens at end
             l_of_embs = [emb[:l+1, :] for emb, l in zip(embeddings, lens)]
+
+        #padding = torch.zeros(h_V.shape[0], self.L_max - h_V.shape[1], h_V.shape[2])  # 1 x (L_max - L) x V
+        #return torch.cat([h_V, padding], dim=1)
             
         return torch.cat(l_of_embs, dim=0)[1:,:].unsqueeze(0) # 1 x Lsum x V (remove the first CLS, so it is treated as a sep chain)
 
-    def ESMIF(self, structures): # https://colab.research.google.com/github/facebookresearch/esm/blob/master/examples/inverse_folding/notebook_multichain.ipynb#scrollTo=99d74757
+    def ESMIF(self, ag_pdb_path): # https://colab.research.google.com/github/facebookresearch/esm/blob/master/examples/inverse_folding/notebook_multichain.ipynb#scrollTo=99d74757
         """
         Generates encodings using the ESMIF model from Facebook Research. Embeddings are taken from the final layer of the model.
         Args: 
@@ -156,9 +202,9 @@ class Ag_embeddings(nn.Module):
         """
         model, alphabet = esm.pretrained.esm_if1_gvp4_t16_142M_UR50()
         batch_converter = alphabet.get_batch_converter()
-        model.eval() # disables dropout for deterministic results
+        model.eval()
 
-        coords, native_seq = esm.inverse_folding.util.load_coords(structures[0]) # Just load the first structure for now, will need to modify to handle multiple structures
+        coords, native_seq = esm.inverse_folding.util.load_coords(ag_pdb_path)
         print(coords)
 
         data = [(f"protein_{i}", seq) for i, seq in enumerate(sequences)] # ESM2 format: list of tuples (protein_id, sequence)
@@ -170,22 +216,21 @@ class Ag_embeddings(nn.Module):
 
         return token_representations
 
-    def ProteinMPNN(self, structures, mpnn_model, noise, bb_perturbation):
+    def ProteinMPNN(self, ag_pdb_path, ag_chains, mpnn_model, noise, bb_perturbation):
+        # ag_chains = "|".join(ag_chains) # Double check if I actually need this 
+
         encoder = ProteinMPNN_Encoder(
             model=mpnn_model,
             noise=noise,
             bb_perturbation=bb_perturbation
         ).to(self.device)
 
-        EMBEDDINGS = []
-        for pdb_path in structures:
-            h_V = encoder.encode(pdb_path, ag_chains='A')
+        h_V = encoder.encode(ag_pdb_path, ag_chains=ag_chains, max_len=self.L_max) # Fix this max len bullish
+        
+        #padding = torch.zeros(h_V.shape[0], self.L_max - h_V.shape[1], h_V.shape[2])  # 1 x (L_max - L) x V
+        #h_V = torch.cat([h_V, padding], dim=1)
 
-            EMBEDDINGS.append(h_V[0]) # Squeeze out batch dimension (maybe do this first for memory efficiency w padding?)
-            padding = torch.zeros(self.L_MAX+2 - EMBEDDINGS[-1].shape[0], EMBEDDINGS[-1].shape[1]).to(self.device) # B x L x H -> L x H
-            EMBEDDINGS[-1] = torch.cat((EMBEDDINGS[-1], padding), dim=0) # Pad to L_MAX
-
-        return torch.stack(EMBEDDINGS) # Shape: (num_structures, Lmax+2, 1280)
+        return h_V
 
     def AFM(self, structures):
         pass
@@ -246,31 +291,28 @@ class Ag_embeddings(nn.Module):
         Args: 
             structures (list of str): List of paths to antigen PDB files.
         Returns:
-            torch.Tensor: A tensor of shape (num_structures, Lmax, 1) since PRE is a per-residue feature.
+            torch.Tensor: A tensor of shape (1, L*, 1) since PRE is a per-residue feature, we can think of it's Vocab as being in R^1.
         """
-        #from pyrosetta.toolbox import cleanATOM
 
-        #cleanATOM(structure)
-        #clean_path = structure.replace(".pdb", ".clean.pdb")
         #pyrosetta.init("-mute all", silent=True)
         pyrosetta.init("-mute all -ignore_unrecognized_res 1 -load_PDB_components false", silent=True)
 
         score_fxn = pyrosetta.get_score_function(True)
         #per_res_sasa_metric = pyrosetta.rosetta.core.simple_metrics.per_residue_metrics.PerResidueSasaMetric()
         per_res_energy_metric = pyrosetta.rosetta.core.simple_metrics.per_residue_metrics.PerResidueEnergyMetric()
+        per_res_energy_metric.set_scorefunction(score_fxn)
 
         pose = pyrosetta.pose_from_pdb(structure)
         pre = per_res_energy_metric.calculate(pose)
+        
         chain_energies = [
             energy for res_idx, energy in pre.items()
             if pose.pdb_info().chain(res_idx) in ag_chains
         ]
 
-        #pre = list(per_res_energy_metric.calculate(pose).values()) # List of PRE values for each residue in the antigen
-        #pre += [0] * (self.L_MAX - len(pre)) # Pad to L_MAX with 0s, since PRE is a per-residue feature
-        #EMBEDDINGS.append(torch.tensor(pre).unsqueeze(1)) # Shape: Lmax x 1
+        chain_energies += [0] * (self.L_max - len(chain_energies)) # Pad to L_MAX with 0s, since PRE is a per-residue feature
 
-        #return torch.stack(EMBEDDINGS).to(self.device)
+        return torch.tensor([chain_energies], dtype=torch.float32).unsqueeze(-1)
 
     def Biophysics(self, sequences):
         """
@@ -280,7 +322,7 @@ class Ag_embeddings(nn.Module):
         Args: 
             sequences (dict): Given an Antigen pdb, it is formatted as {"chain": Seq, "chain": Seq, ...}
         Returns:
-            torch.Tensor: A tensor of shape (num_structures, 1, 11) 
+            torch.Tensor: A tensor of shape (1, n_chains, 11) 
             NOTE: Biophysical features are global properties of the sequence, so we can just repeat them across the sequence length dimension.
         """
         
@@ -310,13 +352,14 @@ class Ag_embeddings(nn.Module):
             if len(sequences)>1 and (i+1)<len(sequences):
                 ALL_MATRICES.append(CH_BRK)
         
-        embeddings = torch.tensor(ALL_MATRICES)
-        return embeddings.unsqueeze(0)
+        embeddings = torch.tensor(ALL_MATRICES).unsqueeze(0) # 1 x 3 x L
+        padding = torch.zeros(embeddings.shape[0], self.max_chains - embeddings.shape[1], embeddings.shape[2])
+        return torch.cat([embeddings, padding], dim=1)
         
         
 # ESM-IF, AF-M, ESM3 (DONE, BUT NEED SEP ENVIRONMENT)
-embedder = Ag_embeddings(method="One_hot")
+#embedder = Ag_embeddings(method="ESMIF")
 #structure = "Penta_Alanine_Antigen.pdb"
-structure = '/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb'
-embeddings = embedder.embed(structure)
+#structure = '/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb'
+#embeddings = embedder.embed(structure, ag_chains=['A', 'B'])
 #print(embeddings.shape)
