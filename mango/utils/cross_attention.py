@@ -256,10 +256,10 @@ class UnifiedTransformerBlock(nn.Module):
         """
 
         r1 = self.attn(x, h_V, sequence_id)
-        x += r1 / self.scaling_factor
+        x = x + r1 / self.scaling_factor
         
         r3 = self.ffn(x) / self.scaling_factor
-        x += r3
+        x = x + r3 # Keep this syntax to avoid inplace modification during autograd
 
         return x
 

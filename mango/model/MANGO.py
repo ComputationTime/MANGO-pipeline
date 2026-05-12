@@ -29,16 +29,7 @@ CHECKPOINT_DICT = {
 }
 #ABLANG2_VOCAB_FILE = os.path.join(project_path, 'utils/Ablang2_vocab.txt')
 
-configs = transformers.GPT2Config(
-    vocab_size=26, # Should be 26
-    n_positions=2048,
-    n_layer=4,
-    n_head=8,
-    hidden_size=480
-    #hidden_dropout_prob=0.3, # Added dropout probability
-    #attention_probs_dropout_prob=0.3 # Added attention dropout probability
-) #12M parameters
-
+L_MAX = 300 #AMINO ACIDS
 
 class EncodeInputs(nn.Module):
     """
@@ -46,16 +37,18 @@ class EncodeInputs(nn.Module):
     are combined via a learned cross-attention and then used by MANGO to generate de novo ab sequences. If antibody context
     is not given, the Ag structural embeddings will suffice as context to generate and the Ab will be completely masked.
     """
-    def __init__(self, d_model, n_heads, n_layers, ag_representation, mpnn_type='ca_models',):
+    def __init__(self, d_model, n_heads, n_layers, ag_representation, mpnn_type='vanilla_models', mpnn_noise=2, bb_perturbation=0.0):
         super().__init__()
+
+        self.MPNN_TYPE = mpnn_type
+        self.MPNN_NOISE = mpnn_noise 
+        self.MPNN_BB_PERTURBATION = bb_perturbation
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Benefit is that these are learned embeddings [instead of randomly selected by tokenizer]
         self.chain_embed = nn.Embedding(3, 480) # 3 chains: H, L, scFv --> AbLM dim: 480
-        
-        self.ag_struct_encoder = Ag_embeddings(method=ag_representation) # Ag structure encoder
-        self.ab_seq_encoder = AbLM_embeddings() # Ab sequence encoder
+        self.ag_struct_encoder = Ag_embeddings(method=ag_representation)
+        self.ab_seq_encoder = AbLM_embeddings()
 
         self.cross_attn = TransformerStack(
             d_model=d_model, 
@@ -64,11 +57,11 @@ class EncodeInputs(nn.Module):
             d_Ag_rep=MODEL_TO_HDIM[ag_representation]
         ).to(self.device)
 
-    def forward(self, antigen_pdb_path, chain, ab_seq_context, ag_cold_spots, ag_hot_spots, get_tokens=False):
+    def forward(self, antigen_pdb_path, antigen_chains, ab_seq_context, chain, ag_cold_spots, ag_hot_spots, get_tokens=False):
 
         #cold_spots, hot_spots (NEXT IMPLEMENTATION)
-
-        h_V = self.ag_struct_encoder.embed(antigen_pdb_path)
+        h_V = self.ag_struct_encoder.embed(antigen_pdb_path, antigen_chains, 
+                                           mpnn_type= self.MPNN_TYPE, noise=self.MPNN_NOISE, bb_perturbation=self.MPNN_BB_PERTURBATION)
         x = self.ab_seq_encoder.embed(ab_seq_context, get_tokens=get_tokens) # If no chain, this will be a [MASK] token that "absorbs" all Ag info
 
         if get_tokens: 
@@ -77,7 +70,7 @@ class EncodeInputs(nn.Module):
         input_embeddings = self.cross_attn(x, h_V.to(self.device), ag_cold_spots, ag_hot_spots)
 
         if chain=='H':
-            chain_embeddings = self.chain_embed(torch.tensor([0])) # (B,1024)
+            chain_embeddings = self.chain_embed(torch.tensor([0]).to(self.device)) # (B,1024)
         elif chain=='L':
             chain_embeddings = self.chain_embed(torch.tensor([1]).to(self.device)) # (B,1024)
         elif chain=='scFv':
@@ -86,8 +79,15 @@ class EncodeInputs(nn.Module):
         chain_aware_embeddings = torch.cat([
             chain_embeddings.unsqueeze(1).to(self.device),
             input_embeddings
-        ], dim=1) # Put the chain embeddings at the beginning for context similar to IgLM
-        
+        ], dim=1)
+
+        pad_len = L_MAX - chain_aware_embeddings.shape[1]
+        chain_aware_embeddings = F.pad(
+            chain_aware_embeddings,
+            (0, 0, 0, pad_len),
+            value=0
+        )
+            
         if get_tokens:
             return chain_aware_embeddings, tokens
         else: 
@@ -104,6 +104,7 @@ class MANGO(nn.Module):
         self.tokenizer.cls_token_id = 22 # from Ablang2 github
 
         #self.model = transformers.GPT2LMHeadModel.from_pretrained(CHECKPOINT_DICT[model_name]).to(self.device)
+        #self.model.load_state_dict(torch.load(''))
 
         configs = transformers.GPT2Config(
             vocab_size=len(self.tokenizer), # Should be 26
@@ -113,6 +114,7 @@ class MANGO(nn.Module):
             hidden_size=480
         ) #12M parameters
         self.model = transformers.GPT2LMHeadModel(configs).eval().to(self.device)
+        #self.model.load_state_dict(torch.load('/scratch/jgray21/dvincen9/projects/MANGO/mango/trained_models/One_Hot/model.pt'))
        
         #total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         #print(f"Total parameters: {total_params:,}")
@@ -126,6 +128,7 @@ class MANGO(nn.Module):
         )
     
     def _generate(self, input_embeddings, chains_to_generate, num_to_generate, top_p, temperature):
+        """Inference-only: samples sequences autoregressively."""
         decoded_seqs = set()  # Set to remove duplicates
         pbar = tqdm(total=num_to_generate)
         
@@ -152,42 +155,87 @@ class MANGO(nn.Module):
         pbar.close()
         return list(decoded_seqs)
 
-    def generate(self, antigen_pdb_path, prompt_sequence='*', chains_to_generate='H', num_to_generate=1, top_p=1, temperature=1, ag_cold_spots=None, ag_hot_spots=None,): 
+    def forward(self, antigen_pdb_path, antigen_chains, prompt_ab_seq='*', chains_to_generate='H',
+                labels=None, ag_cold_spots=None, ag_hot_spots=None):
+        """
+        Forward pass used during training. Returns loss if labels are provided, else logits.
+
+        Args:
+            antigen_pdb_path (str): Path to the antigen PDB structure.
+            antigen_chains (list): Chain IDs to use as antigen context.
+            prompt_ab_seq (str): Optional prompt sequence (H or L chain); '*' for none.
+            chains_to_generate (str): 'H', 'L', or 'scFv'.
+            labels (torch.LongTensor): Token IDs of shape (1, L) for computing cross-entropy loss.
+            ag_cold_spots (list of int): Antigen positions to down-weight in cross-attention.
+            ag_hot_spots (list of int): Antigen positions to highlight in cross-attention.
+
+        Returns:
+            loss (torch.Tensor) if labels provided, else logits (torch.Tensor).
+        """
+        if chains_to_generate == 'H':
+            ab_seq_context = ['', prompt_ab_seq]
+        elif chains_to_generate == 'L':
+            ab_seq_context = [prompt_ab_seq, '']
+        elif chains_to_generate == 'scFv':
+            # FIX: was referencing undefined `prompt_sequence`
+            ab_seq_context = [prompt_ab_seq, '']
+
+        chain_aware_embeddings = self.encoder(
+            antigen_pdb_path=antigen_pdb_path, 
+            antigen_chains=antigen_chains,
+            ab_seq_context=ab_seq_context, 
+            chain=chains_to_generate, 
+            ag_cold_spots=ag_cold_spots, 
+            ag_hot_spots=ag_hot_spots
+        )  # (1, L_ctx, d_model)
+
+        output = self.model(inputs_embeds=chain_aware_embeddings, labels=labels)
+        
+        if labels is not None:
+            return output.loss
+        else:
+            return output.logits
+
+    def generate(self, antigen_pdb_path, antigen_chains, prompt_ab_seq='*', chains_to_generate='H', 
+                 num_to_generate=10, top_p=1, temperature=1, ag_cold_spots=None, ag_hot_spots=None,): 
         '''
-        Function to generate sequences from MANGO, an antigen conditioned autoregressive model. Only works
-        for de novo only works with no prompt and infilling only withs with a template sequence. For 
-        infilling, it only returns the chain being infilled (since the other one will remain the same).
+        Function to generate sequences from MANGO, an antigen conditioned autoregressive model. 
 
         Args: 
-            1. antigen_pdb_path (str): The path to the antigen structure to condition generation 
-            2. antigen_chains (list): The chain(s) in the PDB to use as antigen context (e.g. ['A'] or ['A','B'])
-            3. prompt_sequence (str): A single prompt sequence (either H or L)
-            4. chains_to_generate (str): 'H', 'L', or 'scFv'.[NOTE: scFv does not take a prompt sequence]
-            5. num_to_generate (int): How many sequences to generate from the model 
-            6. top_p (int): Maximum cdf to consider (from sum of token probability). [Compared to top_k]
-            7. temperature (float): sampling temperature, higher is more even distribution 
-            8. ag_cold_spots (list of ints): Manually curated positions to ignore during cross attention
-            9. ag_hot_spots (list of ints): Manually curated positinos to highlight during cross attention
+            antigen_pdb_path (str): Path to the antigen structure to condition generation 
+            antigen_chains (list): Chain(s) in the PDB to use as antigen context (e.g. ['A'] or ['A','B'])
+            prompt_ab_seq (str): An optional single prompt sequence (either H or L)
+            chains_to_generate (str): 'H', 'L', or 'scFv'.[NOTE: scFv does not take a prompt sequence]
+            num_to_generate (int): How many sequences to generate from the model 
+            top_p (int): Maximum cdf to consider (from sum of token probability). [Compared to top_k]
+            temperature (float): sampling temperature, higher is more even distribution 
+            ag_cold_spots (list of ints): Manually curated positions to ignore during cross attention
+            ag_hot_spots (list of ints): Manually curated positinos to highlight during cross attention
 
         Returns:
             generated_seqs: A list of generated sequences
         '''
 
+        #if len(prompt_ab_seq)<L_MAX:
+        #    N_PAD = (L_MAX-len(prompt_ab_seq))
+        #    prompt_ab_seq += '*'* N_PAD
+
         if chains_to_generate=='H':
-            prompt_sequence = ['',prompt_sequence]
+            ab_seq_context = ['',prompt_ab_seq]
         elif chains_to_generate=='L':
-            prompt_sequence = [prompt_sequence,'']
+            ab_seq_context = [prompt_ab_seq,'']
         elif prompt_sequence=='*' and chains_to_generate=='scFv':
-            prompt_sequence = [prompt_sequence,'']
+            ab_seq_context = [prompt_ab_seq,'']
 
         chain_aware_embeddings = self.encoder(
             antigen_pdb_path=antigen_pdb_path, 
-            ab_seq_context=prompt_sequence, 
+            antigen_chains=antigen_chains,
+            ab_seq_context=ab_seq_context, 
             chain=chains_to_generate, 
             ag_cold_spots=ag_cold_spots, 
             ag_hot_spots=ag_hot_spots
         )
-        
+
         return self._generate(
             input_embeddings=chain_aware_embeddings, 
             chains_to_generate=chains_to_generate, 
@@ -199,37 +247,37 @@ class MANGO(nn.Module):
     def log_likelihood(self, antigen_pdb_path, sequences, chains_to_score='H', ag_cold_spots=None, ag_hot_spots=None,):
 
         lls = []
-        for seq in sequences:
-            if chains_to_score=='H':
-                prompt_sequence = [seq, '']
-            elif chains_to_score=='L':
-                prompt_sequence = ['', seq]
-            elif chains_to_score=='scFv':
-                propmt_sequence = [seq, '']
+        with torch.no_grad():
+            for seq in sequences:
+                if chains_to_score=='H':
+                    prompt_sequence = [seq, '']
+                elif chains_to_score=='L':
+                    prompt_sequence = ['', seq]
+                elif chains_to_score=='scFv':
+                    propmt_sequence = [seq, '']
 
-            chain_aware_embeddings, token_seq = self.encoder(antigen_pdb_path=antigen_pdb_path, ab_seq_context=prompt_sequence, chain=chains_to_score, ag_cold_spots=ag_cold_spots, ag_hot_spots=ag_hot_spots, get_tokens=True)
-            
-            logits = self.model(inputs_embeds=chain_aware_embeddings).logits # B x Lmax x 30
-            shift_logits = logits[..., 1:-1, :].contiguous() # Remove [Ag_embeddings] ... [CLS]
-            shift_labels = token_seq[..., 1:].contiguous().long() # [Ag_embeddings]
-            nll = torch.nn.functional.cross_entropy(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1),
-                reduction='mean',
-            )
+                chain_aware_embeddings, token_seq = self.encoder(antigen_pdb_path=antigen_pdb_path, ab_seq_context=prompt_sequence, chain=chains_to_score, ag_cold_spots=ag_cold_spots, ag_hot_spots=ag_hot_spots, get_tokens=True)
+                
+                logits = self.model(inputs_embeds=chain_aware_embeddings).logits # B x Lmax x 30
+                shift_logits = logits[..., 1:-1, :].contiguous() # Remove [Ag_embeddings] ... [CLS]
+                shift_labels = token_seq[..., 1:].contiguous().long() # [Ag_embeddings]
+                nll = torch.nn.functional.cross_entropy(
+                    shift_logits.view(-1, shift_logits.size(-1)),
+                    shift_labels.view(-1),
+                    reduction='mean',
+                )
 
-            ll.append(-nll.item())
+                lls.append(-nll.item())
 
         return lls
-
 
 #model = MANGO()
 #model._check_IgBERT_vocab()
 
 # De novo generation (Ideally want 1 Ag, 1 sequence?)
-#list_of_de_novo_seqs = model.generate(antigen_pdb_path='/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb')
+#list_of_de_novo_seqs = model.generate(antigen_pdb_path='/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb', antigen_chains=['A', 'B'])
 #list_of_de_novo_seqs = model.generate(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/MANGO/mango/utils/Penta_Alanine_Antigen.pdb'])
-#model.log_likelihood(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/MANGO/mango/utils/Penta_Alanine_Antigen.pdb'])
+#model.log_likelihood(antigen_pdb_path=['/scratch/jgray21/dvincen9/projects/MANGO/mango/utils/Penta_Alanine_Antigen.pdb'], sequences=['QVQ', "EIV"])
 #print(list_of_de_novo_seqs)
 
 

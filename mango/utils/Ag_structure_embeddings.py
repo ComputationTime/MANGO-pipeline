@@ -9,8 +9,8 @@ from Bio import SeqIO
 from Bio.PDB import PDBParser, PPBuilder
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
-from mango.utils.MPNN_embeddings import *
 from pyrosetta import *
+from mango.utils.MPNN_embeddings import *
 
 # Note, I still don't have the full set up for ESM-IF and AF-M, so please ignore those for now!
 class Ag_embeddings(nn.Module):
@@ -254,7 +254,7 @@ class Ag_embeddings(nn.Module):
 
         # Load model
         model: ESM3InferenceClient = ESM3.from_pretrained("esm3_sm_open_v1").to("cpu")
-        model = model.float() # Fix dtype mismatch between model and input data, which is in float32. ESM3 model parameters are in float16 by default, so we need to convert them to float32 for compatibility with the input data.
+        model = model.float() # Fix dtype mismatch between model and input data. ESM3 model parameters are in float16 by default, but data is in float32.
 
         # Load PDB
         EMBEDDINGS = []
@@ -310,7 +310,7 @@ class Ag_embeddings(nn.Module):
             if pose.pdb_info().chain(res_idx) in ag_chains
         ]
 
-        chain_energies += [0] * (self.L_max - len(chain_energies)) # Pad to L_MAX with 0s, since PRE is a per-residue feature
+        #chain_energies += [0] * (self.L_max - len(chain_energies)) # Pad to L_MAX with 0s, since PRE is a per-residue feature
 
         return torch.tensor([chain_energies], dtype=torch.float32).unsqueeze(-1)
 
@@ -356,10 +356,11 @@ class Ag_embeddings(nn.Module):
         padding = torch.zeros(embeddings.shape[0], self.max_chains - embeddings.shape[1], embeddings.shape[2])
         return torch.cat([embeddings, padding], dim=1)
         
-        
+"""        
 # ESM-IF, AF-M, ESM3 (DONE, BUT NEED SEP ENVIRONMENT)
-#embedder = Ag_embeddings(method="ESMIF")
+embedder = Ag_embeddings(method="ESM3")
 #structure = "Penta_Alanine_Antigen.pdb"
-#structure = '/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb'
-#embeddings = embedder.embed(structure, ag_chains=['A', 'B'])
-#print(embeddings.shape)
+structure = '/weka/scratch/jgray21/dvincen9/TRAINING/MANGO/SAbDAb/structures/8hnm.pdb'
+embeddings = embedder.embed(structure, ag_chains=['A', 'B'])
+print(embeddings.shape)
+"""

@@ -15,15 +15,7 @@ class AbLM_embeddings():
         """
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        #self.AbLang2_tokeniser = AutoTokenizer.from_pretrained("hemantn/ablang2", trust_remote_code=True)        
-        #self.model = AutoModel.from_pretrained("hemantn/ablang2", trust_remote_code=True).to(self.device)
-
         self.model = ablang2.pretrained(model_to_use='ablang2-paired', random_init=False, ncpu=1, device=self.device)
-        
-        # FREEZE ABLANG WEIGHTS
-        #for param in self.model.parameters():
-        #    param.requires_grad = False
 
     def _tokenize(self, seq):
         seqs = [f"{seq[0]}|{seq[1]}"] # Input needs to be a list, with | used to separated the VH and VL 
@@ -65,13 +57,6 @@ class AbLM_embeddings():
 
         else:
             return cleaned_embeddings
-
-    def batch_decode(self, tokens): ############
-        #sep_id = self.AbLang2_tokeniser.sep_token_id
-        #first_sep_positions = (AbLang2_tokens['input_ids'] == sep_id).float().argmax(dim=1)
-        #rint(first_sep_positions)
-        return self.AbLang2_tokeniser.batch_decode(tokens)
-        
 
 #AbLang2 = AbLM_embeddings()
 #x = AbLang2.embed(['*', 'DIK']) # Using [MASK] does not stop things from attending to it (GOOD)
