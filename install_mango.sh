@@ -28,7 +28,7 @@ rm "$WEIGHTS_DIR/MANGO.zip"
 rm -r MANGO.egg-info/ build/
 
 # Get a dummy pdb for users to start with
-echo "Fetching a copy of 
+echo "Fetching a copy of "
 
 echo "Lastly installing pyrosetta. Will do this for now while license is temporarily hard to find..."
 pip install pyrosetta --find-links https://west.rosettacommons.org/pyrosetta/quarterly/release

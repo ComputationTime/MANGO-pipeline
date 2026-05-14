@@ -26,6 +26,7 @@ To generate 100 unpaired sequences using MANGO conditioned on Antigen structure,
 
 ```python
 from mango import MANGORunner
+
 model = MANGORunner(ag_representation='One_hot')
 
 antigen_pdb_path = 'test.pdb'
