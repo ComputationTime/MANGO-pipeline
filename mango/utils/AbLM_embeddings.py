@@ -4,40 +4,44 @@ import ablang2
 import transformers
 
 
+"""
+From AbLang2/tokenizers.py: 
+
+self.pad_token = '-'
+self.start_token = '<'
+self.end_token = '>'
+self.sep_token = '|'
+self.mask_token = '*'
+self.unknown_token = 'X'
+"""
 class AbLM_embeddings():
     def __init__(self):
-        """
-        Goal: This module will take in a list of antibody sequences of format ['HEAVY', 'LIGHT'] and generate embeddings using AbLang2. In the event where only no chain 
-        is given (e.g. VHH, Bence Jones proteins [BJP], scFvs, etc.), the model will be fed a [PAD] token in place of the missing chain. 
-
-        Functions: 
-            embed(list of str seqs) -> [ tensor(B,Lmax,H), starting_tokens (B,Lmax) ]
-        """
-
+        """ Generate embeddings using AbLang2. If no chain given (e.g. VHH, Bence Jones proteins [BJP], scFvs, etc.), use a mask token""" 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = ablang2.pretrained(model_to_use='ablang2-paired', random_init=False, ncpu=1, device=self.device)
+        self.ab_model = ablang2.pretrained(model_to_use='ablang2-paired', random_init=False, ncpu=1, device=self.device)
 
     def _tokenize(self, seq):
-        seqs = [f"{seq[0]}|{seq[1]}"] # Input needs to be a list, with | used to separated the VH and VL 
-        return self.model.tokenizer(seqs, pad=True, w_extra_tkns=False, device=self.device)
+        """ seq (list): ['HEAVY', 'LIGHT'] """
+        seqs = [f"{seq[0]}|{seq[1]}"] # AbLang2 input needs to be a list, with | used to separated the VH and VL 
+        return self.ab_model.tokenizer(seqs, pad=True, w_extra_tkns=False, device=self.device)
     
     def embed(self, input_sequences=None, get_tokens=False):
         '''Applies self-attention, but then zero-out positions where input was padded'''
         AbLang2_tokens = self._tokenize(input_sequences)
 
         with torch.no_grad():
-            raw_embeddings = self.model.AbRep(AbLang2_tokens).last_hidden_states
+            raw_embeddings = self.ab_model.AbRep(AbLang2_tokens).last_hidden_states
 
         if get_tokens:
             return raw_embeddings, AbLang2_tokens
         else:
             return raw_embeddings
 
-    def get_embeddings(self, input_sequences=None, return_attentions=False):
+    def cleaner_embeddings(self, input_sequences=None, return_attentions=False):
         AbLang2_tokens = self._tokenize(input_sequences)
 
         with torch.no_grad(): # attentions, embeddings, logits 
-            outputs = self.model(
+            outputs = self.ab_model(
                 input_ids = AbLang2_tokens['input_ids'],
                 attention_mask = AbLang2_tokens['attention_mask'], # (B,L)
             )
@@ -62,3 +66,8 @@ class AbLM_embeddings():
 #x = AbLang2.embed(['*', 'DIK']) # Using [MASK] does not stop things from attending to it (GOOD)
 #print(x.shape)
 #print(x[0].shape)
+
+"""
+LIGHT: tensor([[23, 25,  5, 16,  4]])
+HEAVY: tensor([[ 5, 16,  4, 25, 23]])
+"""

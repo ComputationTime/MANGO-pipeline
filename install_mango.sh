@@ -31,6 +31,6 @@ rm -r MANGO.egg-info/ build/
 echo "Fetching a copy of 
 
 echo "Lastly installing pyrosetta. Will do this for now while license is temporarily hard to find..."
-pip install pyrosetta --find-links https://west.rosettacommons.org/pyrosetta/quarterly/releasecl
+pip install pyrosetta --find-links https://west.rosettacommons.org/pyrosetta/quarterly/release
 
 echo "Successfully installed MANGO 🥭 and downloaded it's weights! Have fun 🐵"

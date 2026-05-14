@@ -1,5 +1,9 @@
 import numpy as np 
 
+import os
+import mango
+import transformers
+
 # <, -, *, X, |
 BAD_WORD_IDS = [[0], [21], [23], [24], [25],]
 
@@ -57,6 +61,38 @@ ablang_vocab = {
 }
 
 ablang_decode = {i:j for j,i in ablang_vocab.items()}
+
+MAX_SEQ_GEN_LENGTH = 300 
+
+MANGO_configs = transformers.GPT2Config(
+    vocab_size=26, # Should be 26
+    n_positions=2048,
+    n_layer=4,
+    n_head=8,
+    hidden_size=480
+    #hidden_dropout_prob=0.3, # Added dropout probability
+    #attention_probs_dropout_prob=0.3 # Added attention dropout probability
+) 
+
+project_path = os.path.dirname(os.path.realpath(mango.__file__))
+trained_models_dir = os.path.join(project_path, 'trained_models')
+
+MANGO_TRAINED_MODELS = {
+    "One_hot": os.path.join(trained_models_dir, 'One_hot'),
+    "ESM2_": os.path.join(trained_models_dir, 'ESM2_'),
+    "ESM2_": os.path.join(trained_models_dir, 'ESM2_'),
+    "ESM2_": os.path.join(trained_models_dir, 'ESM2_'),
+    "ESM2_": os.path.join(trained_models_dir, 'ESM2_'),
+    "ESM2_": os.path.join(trained_models_dir, 'ESM2_'),
+    "ESM2_": os.path.join(trained_models_dir, 'ESM2_'),
+    "ESM2_": os.path.join(trained_models_dir, 'MANGO'),
+    "ESM2_": os.path.join(trained_models_dir, 'MANGO'),
+    "ESM2_": os.path.join(trained_models_dir, 'MANGO'),
+    "ProteinMPNN": os.path.join(trained_models_dir, 'ProteinMPNN'),
+    "PyRosetta_PRE": os.path.join(trained_models_dir, 'PyRosetta_PRE'),
+    "Biophysics": os.path.join(trained_models_dir, 'Biophysics'),
+    "MANGO": os.path.join(trained_models_dir, 'MANGO'),
+}
 
 def mask_span(seq, start, end, append_span = False):
     masked_seq = seq[:start] + ['[MASK]'] + seq[end:] + ['[SEP]']

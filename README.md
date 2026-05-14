@@ -25,10 +25,8 @@ bash install_mango.sh
 To generate 100 unpaired sequences using MANGO conditioned on Antigen structure, use the following code:
 
 ```python
-from mango import MANGO
-from mango.utils import Penta_Alanine_Antigen.pdb
-
-model = MANGO(ag_representation='One_hot')
+from mango import MANGORunner
+model = MANGORunner(ag_representation='One_hot')
 
 antigen_pdb_path = 'test.pdb'
 chains_to_generate = 'H'
@@ -44,16 +42,16 @@ sequences = model.generate(
 print(sequences)
 ```
 
-`Note`: Currently available ag_representations are: `One_hot`, ``, ``,
+`Note`: Currently available ag_representations are: `One_hot`, `ESM2_*`, `ProteinMPNN (ca_models, vanilla_models, soluble_models)`, `PyRosetta_PRE`, `Biophysics`,
 
 
 ### Generation using Antigen structure and a complement chain
 BANANA provides rich antibody embeddings (via PyTorch tensors) of shape `[Nseqs x 300 x Hdim]` that consider the amino acid sequence, the DNA sequence, and the organism of origin. To gather these embeddings, use the following code:  
 
 ```python
-from mango import MANGO
+from mango import MANGORunner
 
-model = MANGO(ag_representation='One_hot')
+model = MANGORunner(ag_representation='One_hot')
 
 antigen_pdb_path = 'test.pdb'
 prompt_sequence = 'EVQLVESGGGLVQPGGSLRLSCAASGFNIKEYYMHWVRQAPGKGLEWVGLIDPEQGNTIYDPKFQDRATISADNSKNTAYLQMNSLRAEDTAVYYCARDTAAYFDYWGQGTLVTVS'
@@ -76,9 +74,9 @@ print(sequences)
 To forward translate Amino Acid sequences into the corresponding DNA sequence, use the following code: 
 
 ```python
-from mango import MANGO
+from mango import MANGORunner
 
-model = MANGO(ag_representation='One_hot')
+model = MANGORunner(ag_representation='One_hot')
 
 antigen_pdb_path = 'test.pdb'
 chains_to_score = 'L'
