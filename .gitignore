@@ -10,3 +10,14 @@
 # Snakemake working directory
 .snakemake/
 artifacts/
+
+# Local smoke review index uses symlinks into ignored canonical artifacts.
+# The self-contained lightweight export under github/ is tracked separately.
+review/smoke_artifacts/.mango_review_bundle
+review/smoke_artifacts/README.md
+review/smoke_artifacts/embedders/
+review/smoke_artifacts/figure_data/
+review/smoke_artifacts/figures/
+review/smoke_artifacts/logs/
+review/smoke_artifacts/manifest.json
+review/smoke_artifacts/summary/
