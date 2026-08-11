@@ -1,0 +1,12 @@
+{
+  "compute_capability": "8.6",
+  "cuda_visible_devices": null,
+  "driver_version": "580.159.03",
+  "gpu_memory_gb": 44.42,
+  "gpu_name": "NVIDIA RTX A6000",
+  "hostname": "47480f7fc249",
+  "kernel_checksum": -0.04160865396261215,
+  "status": "ok",
+  "torch_cuda_version": "12.1",
+  "torch_version": "2.5.1"
+}

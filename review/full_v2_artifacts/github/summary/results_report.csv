@@ -1,0 +1,10 @@
+embedder,status,failure_stage,run_id,split,n_examples,n_tokens,nll,perplexity,prediction_rows,successful_predictions,training_curve,training_plot,evaluation,predictions
+one_hot,complete,,one_hot__a288de4f,test,426,52077,1.006255650070746,2.7353397469285112,426,426,artifacts/runs/one_hot__a288de4f/training_curve.csv,artifacts/runs/one_hot__a288de4f/training_curve.png,artifacts/runs/one_hot__a288de4f/eval.json,artifacts/runs/one_hot__a288de4f/predictions_test.csv
+one_hot,complete,,one_hot__a288de4f,train,2636,320058,0.39645128429606447,1.4865400183673947,426,426,artifacts/runs/one_hot__a288de4f/training_curve.csv,artifacts/runs/one_hot__a288de4f/training_curve.png,artifacts/runs/one_hot__a288de4f/eval.json,artifacts/runs/one_hot__a288de4f/predictions_test.csv
+one_hot,complete,,one_hot__a288de4f,val,132,16050,0.9156203817058575,2.498324686165448,426,426,artifacts/runs/one_hot__a288de4f/training_curve.csv,artifacts/runs/one_hot__a288de4f/training_curve.png,artifacts/runs/one_hot__a288de4f/eval.json,artifacts/runs/one_hot__a288de4f/predictions_test.csv
+biopython,failed_or_incomplete,training,biopython__9cced44a,,,,,,,,,,,
+pyrosetta_pre,failed_or_incomplete,training,pyrosetta_pre__f5601ee6,,,,,,,,,,,
+esm2,failed_or_incomplete,training,esm2__e37a6a17,,,,,,,,,,,
+esm3,failed_or_incomplete,training,esm3__cf6a2de7,,,,,,,,,,,
+esmif,failed_or_incomplete,training,esmif__fb878fa4,,,,,,,,,,,
+proteinmpnn,failed_or_incomplete,training,proteinmpnn__dc6e942e,,,,,,,,,,,

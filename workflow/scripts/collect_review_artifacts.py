@@ -143,6 +143,13 @@ are expected. `manifest.json` records every available and missing item.
         (staging / "README.md").write_text(readme)
 
         if output.exists():
+            # The generated symlink index is replaced atomically after every
+            # model, while the lightweight, tracked review exports are curated
+            # incrementally. Preserve that non-generated subtree across index
+            # refreshes instead of deleting already published model results.
+            github_review = output / "github"
+            if github_review.exists():
+                shutil.copytree(github_review, staging / "github")
             shutil.rmtree(output)
         staging.rename(output)
     except Exception:
