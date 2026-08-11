@@ -152,7 +152,26 @@ class MangoModel(nn.Module):
         The prompt is byte-identical to training's prefix, so sampling matches
         the trained conditional. The true heavy chain is never supplied.
         """
-        seed = self._prefix(x_ctx, h_ag)
+        return self.generate_heavy_batch(
+            x_ctx, h_ag, batch_size=1, max_new_tokens=max_new_tokens,
+            do_sample=do_sample, top_p=top_p, temperature=temperature,
+        )[0]
+
+    @torch.no_grad()
+    def generate_heavy_batch(self, x_ctx, h_ag, batch_size, max_new_tokens,
+                             do_sample, top_p, temperature):
+        """Sample several heavy chains from one conditioning pair at once.
+
+        All members of a generation batch share the same antigen/light-chain
+        prefix. Expanding that prefix lets Hugging Face perform each decoding
+        step for the whole batch in one GPU call, which is substantially faster
+        than invoking ``generate`` once per design.
+        """
+        if int(batch_size) < 1:
+            raise ValueError("batch_size must be positive")
+        seed = self._prefix(x_ctx, h_ag).expand(
+            int(batch_size), -1, -1
+        ).contiguous()
         out = self.lm.generate(
             inputs_embeds=seed,
             max_new_tokens=max_new_tokens,
@@ -163,7 +182,7 @@ class MangoModel(nn.Module):
             pad_token_id=self.vocab["-"],
             bad_words_ids=self.bad_word_ids,  # blocks specials incl. '|' -> heavy only
         )
-        return out[0].tolist()
+        return [row.tolist() for row in out]
 
     def decode_heavy(self, ids) -> str:
         """Ids -> heavy AA string, stopping at end/sep, dropping special tokens."""

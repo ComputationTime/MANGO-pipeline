@@ -77,6 +77,9 @@ def generate(ckpt_path, model_config_path, records_csv, antigen_emb_path,
     x_ctx = mc.load_embedding(antibody_emb_path).to(device)
 
     n = int(gen_cfg["n_per_target"])
+    # The 480-wide decoder fits a batch of 128 comfortably on the required
+    # 48 GB-class study GPU while avoiding thousands of one-sample launches.
+    batch_size = max(1, int(gen_cfg.get("batch_size", 128)))
     print(
         f"[{tag}] {target_id} ({split}): generating {n} heavy chains against "
         f"antigen chains {row['antigen_chains']} + light chain "
@@ -89,35 +92,46 @@ def generate(ckpt_path, model_config_path, records_csv, antigen_emb_path,
     with open(out_csv, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=COLUMNS)
         writer.writeheader()
-        for i in range(n):
-            base = {
-                "embedder": tag,
-                "run_id": run_id,
-                "target_id": target_id,
-                "split": split,
-                "design_index": i,
-            }
+        reported = 0
+        for batch_start in range(0, n, batch_size):
+            current_batch = min(batch_size, n - batch_start)
             try:
-                ids = model.generate_heavy(
+                sampled = model.generate_heavy_batch(
                     x_ctx,
                     h_ag,
+                    batch_size=current_batch,
                     max_new_tokens=int(gen_cfg["max_new_tokens"]),
                     do_sample=bool(gen_cfg.get("do_sample", True)),
                     top_p=float(gen_cfg.get("top_p", 1.0)),
                     temperature=float(gen_cfg.get("temperature", 1.0)),
                 )
-                seq = model.decode_heavy(ids)
-                base.update(sequence=seq, length=len(seq), status="ok")
-                n_ok += 1
             except Exception as e:  # keep going; record the failure per design
-                base.update(
-                    sequence="", length=0,
-                    status=f"error: {type(e).__name__}: {e}",
-                )
-            writer.writerow(base)
+                sampled = [e] * current_batch
 
-            if (i + 1) % _REPORT_EVERY == 0:
-                print(f"[{tag}] {target_id}: {i + 1}/{n}", flush=True)
+            for offset, result in enumerate(sampled):
+                base = {
+                    "embedder": tag,
+                    "run_id": run_id,
+                    "target_id": target_id,
+                    "split": split,
+                    "design_index": batch_start + offset,
+                }
+                if isinstance(result, Exception):
+                    base.update(
+                        sequence="", length=0,
+                        status=f"error: {type(result).__name__}: {result}",
+                    )
+                else:
+                    seq = model.decode_heavy(result)
+                    base.update(sequence=seq, length=len(seq), status="ok")
+                    n_ok += 1
+                writer.writerow(base)
+            fh.flush()
+
+            completed = batch_start + current_batch
+            if completed // _REPORT_EVERY > reported // _REPORT_EVERY:
+                print(f"[{tag}] {target_id}: {completed}/{n}", flush=True)
+            reported = completed
 
     print(f"[{tag}] {target_id}: wrote {n_ok}/{n} designs -> {out_csv}", flush=True)
 
