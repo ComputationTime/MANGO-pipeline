@@ -1,6 +1,6 @@
 {
   "embedder": "one_hot",
-  "experiment_hash": "79bed882",
+  "experiment_hash": "5a3e5f6e",
   "global_state": {
     "active_embedders": [
       "one_hot"
@@ -146,13 +146,13 @@
       "top_p": 1.0
     },
     "model": {
-      "epochs": 5,
+      "epochs": 10,
       "grad_accum": 1,
       "loss_plot_interval": 250,
       "lr": 0.0001,
       "n_cross_attn_heads": 1,
       "n_cross_attn_layers": 1,
-      "patience": 3,
+      "patience": 2,
       "predict_splits": [
         "test"
       ],
@@ -207,5 +207,5 @@
       "root": "artifacts/weights"
     }
   },
-  "run_id": "one_hot__79bed882"
+  "run_id": "one_hot__5a3e5f6e"
 }

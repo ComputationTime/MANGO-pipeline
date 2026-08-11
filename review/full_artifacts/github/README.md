@@ -8,12 +8,15 @@ embedding tensors, or raw 40,000-row design sets.
 
 | Model | Run ID | Epochs | Train NLL (final) | Validation NLL (best/final) | Test NLL | Status |
 |---|---|---:|---:|---:|---:|---|
-| one_hot | `one_hot__79bed882` | 5 | 0.6289 | 1.0290 | 1.0792 | Complete |
+| one_hot | `one_hot__5a3e5f6e` | 10 | 0.4486 | 0.9098 / 0.9098 | 0.9960 | Complete |
 
-For `one_hot`, validation NLL improved at every epoch: 1.5787, 1.2418,
-1.1363, 1.0581, and 1.0290. Five epochs were stable and useful, but the curve
-had not fully plateaued. A longer follow-up should retain early stopping and
-the best-validation checkpoint because the train/validation gap is widening.
+For `one_hot`, the ten validation NLL values were 1.5822, 1.2272, 1.0860,
+1.0353, 1.0088, 0.9672, 0.9507, 0.9118, 0.9255, and 0.9098. Validation
+temporarily regressed at epoch 8, then recovered to a new best at epoch 9;
+patience 2 therefore avoided stopping on a single noisy epoch. Compared with
+the preserved five-epoch baseline (`one_hot__79bed882`, test NLL 1.0792), the
+ten-epoch best checkpoint improves test NLL to 0.9960. Training remained
+finite and stable, though the train/validation gap continues to widen.
 
 Start with:
 

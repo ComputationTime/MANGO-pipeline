@@ -1,31 +1,31 @@
 {
-  "checkpoint_epoch": 4,
-  "checkpoint_val_loss": 1.0289534427451366,
+  "checkpoint_epoch": 9,
+  "checkpoint_val_loss": 0.90982353845329,
   "d_ag": 21,
   "embedder": "one_hot",
-  "experiment_hash": "79bed882",
-  "run_id": "one_hot__79bed882",
+  "experiment_hash": "5a3e5f6e",
+  "run_id": "one_hot__5a3e5f6e",
   "splits": {
     "test": {
       "n_examples": 426,
       "n_skipped_missing_embeddings": 0,
       "n_tokens": 52077,
-      "nll": 1.0791756311857836,
-      "perplexity": 2.942253049379341
+      "nll": 0.9960032799826182,
+      "perplexity": 2.707439298773078
     },
     "train": {
       "n_examples": 2636,
       "n_skipped_missing_embeddings": 0,
       "n_tokens": 320058,
-      "nll": 0.6600879937567364,
-      "perplexity": 1.9349625915387132
+      "nll": 0.4731957595792483,
+      "perplexity": 1.605115568971223
     },
     "val": {
       "n_examples": 132,
       "n_skipped_missing_embeddings": 0,
       "n_tokens": 16050,
-      "nll": 1.032413474362216,
-      "perplexity": 2.807834299750996
+      "nll": 0.9142356184189936,
+      "perplexity": 2.4948674921115317
     }
   },
   "task": "antigen+light->heavy"
