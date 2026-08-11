@@ -1,0 +1,15 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "d_ag": 21,
+  "d_model": 480,
+  "embedder": "one_hot",
+  "experiment_hash": "79bed882",
+  "n_cross_attn_heads": 1,
+  "n_cross_attn_layers": 1,
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "run_id": "one_hot__79bed882",
+  "task": "antigen+light->heavy",
+  "vocab_size": 26
+}

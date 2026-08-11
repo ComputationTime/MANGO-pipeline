@@ -1,0 +1,10 @@
+embedder,status,failure_stage,run_id,split,n_examples,n_tokens,nll,perplexity,prediction_rows,successful_predictions,training_curve,training_plot,evaluation,predictions
+one_hot,complete,,one_hot__79bed882,test,426,52077,1.0791756311857836,2.942253049379341,426,426,artifacts/runs/one_hot__79bed882/training_curve.csv,artifacts/runs/one_hot__79bed882/training_curve.png,artifacts/runs/one_hot__79bed882/eval.json,artifacts/runs/one_hot__79bed882/predictions_test.csv
+one_hot,complete,,one_hot__79bed882,train,2636,320058,0.6600879937567364,1.9349625915387132,426,426,artifacts/runs/one_hot__79bed882/training_curve.csv,artifacts/runs/one_hot__79bed882/training_curve.png,artifacts/runs/one_hot__79bed882/eval.json,artifacts/runs/one_hot__79bed882/predictions_test.csv
+one_hot,complete,,one_hot__79bed882,val,132,16050,1.032413474362216,2.807834299750996,426,426,artifacts/runs/one_hot__79bed882/training_curve.csv,artifacts/runs/one_hot__79bed882/training_curve.png,artifacts/runs/one_hot__79bed882/eval.json,artifacts/runs/one_hot__79bed882/predictions_test.csv
+biopython,failed_or_incomplete,training,biopython__cfb6c2ce,,,,,,,,,,,
+pyrosetta_pre,failed_or_incomplete,training,pyrosetta_pre__7ced9c5b,,,,,,,,,,,
+esm2,failed_or_incomplete,training,esm2__f4c055b5,,,,,,,,,,,
+esm3,failed_or_incomplete,training,esm3__197191df,,,,,,,,,,,
+esmif,failed_or_incomplete,training,esmif__6dca5a81,,,,,,,,,,,
+proteinmpnn,failed_or_incomplete,training,proteinmpnn__2c8a4e28,,,,,,,,,,,

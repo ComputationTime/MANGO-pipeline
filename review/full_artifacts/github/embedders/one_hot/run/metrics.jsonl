@@ -1,0 +1,5 @@
+{"epoch": 0, "iteration": 2636, "train_loss": 1.415689219273019, "val_loss": 1.5787167711691423, "embedder": "one_hot", "run_id": "one_hot__79bed882", "improved": true}
+{"epoch": 1, "iteration": 5272, "train_loss": 0.9661449327683698, "val_loss": 1.2418131963773207, "embedder": "one_hot", "run_id": "one_hot__79bed882", "improved": true}
+{"epoch": 2, "iteration": 7908, "train_loss": 0.7862105872192348, "val_loss": 1.1362851469805746, "embedder": "one_hot", "run_id": "one_hot__79bed882", "improved": true}
+{"epoch": 3, "iteration": 10544, "train_loss": 0.6933335862472252, "val_loss": 1.058051459717028, "embedder": "one_hot", "run_id": "one_hot__79bed882", "improved": true}
+{"epoch": 4, "iteration": 13180, "train_loss": 0.6289370790608326, "val_loss": 1.0289534427451366, "embedder": "one_hot", "run_id": "one_hot__79bed882", "improved": true}
