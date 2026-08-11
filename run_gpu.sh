@@ -101,11 +101,14 @@ run_for_embedder() {
 }
 
 refresh_review_bundle() {
-  # Review bundles are lightweight symlink indexes.  Refresh smoke results
-  # after each method so partial progress is immediately easy to inspect.
+  # Review bundles are lightweight symlink indexes. Refresh after each method
+  # so partial progress is immediately easy to inspect.
   if [[ "$MODE" == smoke* && -f artifacts/gpu/results_report.json ]]; then
     "$DRIVER/bin/python" workflow/scripts/collect_review_artifacts.py \
       --tier smoke --output review/smoke_artifacts
+  elif [[ "$MODE" == study* && -f artifacts/gpu/results_report.json ]]; then
+    "$DRIVER/bin/python" workflow/scripts/collect_review_artifacts.py \
+      --tier full --output review/full_v2_artifacts
   fi
 }
 

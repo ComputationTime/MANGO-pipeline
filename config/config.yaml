@@ -171,6 +171,9 @@ model:
   # is reporting cadence only; validation still runs once at each epoch end.
   loss_plot_interval: 250
   seed: 0
+  # Reproducibly reshuffle every epoch using seed + epoch. Validation remains
+  # fixed-order, and each training structure is visited exactly once per epoch.
+  shuffle_train: true
   train_splits: ["train"]
   val_splits: ["val"]               # early stopping watches this; never test
   predict_splits: ["test"]

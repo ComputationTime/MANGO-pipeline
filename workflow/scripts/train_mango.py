@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import model_common as mc
 import device_common as dc
 from training_curve import write_training_plot
+from training_order import epoch_training_rows
 
 
 def _rows(records_csv, splits):
@@ -85,6 +86,8 @@ def train(
     )
     grad_accum = max(1, int(model_cfg.get("grad_accum", 1)))
     patience = int(model_cfg.get("patience", 3))
+    seed = int(model_cfg.get("seed", 0))
+    shuffle_train = bool(model_cfg.get("shuffle_train", True))
 
     for path in (
         out_ckpt, out_latest, out_model_config, out_metrics,
@@ -196,8 +199,12 @@ def train(
     try:
         with open(out_metrics, "w") as metrics_fh:
             for epoch in range(int(model_cfg["epochs"])):
-                tr = run_epoch(train_rows, True, epoch)
+                epoch_rows = epoch_training_rows(
+                    train_rows, seed=seed, epoch=epoch, shuffle=shuffle_train
+                )
+                tr = run_epoch(epoch_rows, True, epoch)
                 va = run_epoch(val_rows, False, epoch) if val_rows else tr
+                record_point(global_iteration, epoch, "train_epoch", tr)
                 record_point(global_iteration, epoch, "validation", va)
                 write_training_plot(history, out_training_plot, run_id)
                 improved = va < best
@@ -206,6 +213,8 @@ def train(
                     json.dumps(
                         {"epoch": epoch, "iteration": global_iteration,
                          "train_loss": tr, "val_loss": va,
+                         "train_order_seed": seed + epoch,
+                         "train_shuffled": shuffle_train,
                          "embedder": tag, "run_id": run_id, "improved": improved}
                     )
                     + "\n"
@@ -282,6 +291,7 @@ def main():
     defaults = {
         "n_cross_attn_heads": 1, "n_cross_attn_layers": 1, "epochs": 5,
         "lr": 1e-4, "patience": 3, "grad_accum": 1, "seed": 0,
+        "shuffle_train": True,
     }
     defaults.update(json.loads(a.model_cfg))
     rd = Path(a.run_dir)

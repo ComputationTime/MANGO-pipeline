@@ -21,6 +21,7 @@ def _rolling_mean(values, window):
 def write_training_plot(history, output, run_id):
     """Atomically refresh an iteration-axis training/validation loss plot."""
     train = [point for point in history if point["phase"] == "train"]
+    train_epoch = [point for point in history if point["phase"] == "train_epoch"]
     validation = [point for point in history if point["phase"] == "validation"]
     if not train:
         return
@@ -40,6 +41,13 @@ def write_training_plot(history, output, run_id):
             label=f"Training loss ({window}-iteration mean)",
         )
     if validation:
+        if train_epoch:
+            ax.plot(
+                [point["iteration"] for point in train_epoch],
+                [point["loss"] for point in train_epoch],
+                color="#54A24B", marker="o", linewidth=1.8,
+                label="Training loss (epoch mean)",
+            )
         ax.plot(
             [point["iteration"] for point in validation],
             [point["loss"] for point in validation],
@@ -61,4 +69,3 @@ def write_training_plot(history, output, run_id):
     fig.savefig(temporary, dpi=160)
     plt.close(fig)
     temporary.replace(target)
-
