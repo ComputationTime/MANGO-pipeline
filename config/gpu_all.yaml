@@ -1,0 +1,13 @@
+# Every implemented embedder. ESM3 needs HF_TOKEN; PyRosetta use must comply
+# with the RosettaCommons academic/non-commercial licence. AF-M is still a stub.
+active_embedders:
+  - one_hot
+  - biopython
+  - pyrosetta_pre
+  - esm2
+  - esm3
+  - esmif
+  - proteinmpnn
+
+analysis:
+  embedders: null

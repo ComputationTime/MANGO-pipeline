@@ -1,0 +1,13 @@
+name: mango-structure-prediction
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy
+  # Backends are NOT declared here yet -- each needs GPU + downloaded weights,
+  # and AF3's are access-gated. Recommended path is to run the predictor outside
+  # Snakemake and have analysis_predict_structures.py ingest its outputs.
+  #   - boltz    (pip, GPU, weights download)
+  #   - chai_lab (pip, GPU, weights download)
+  #   - AF3      (gated weights + sequence DBs; container, not conda)

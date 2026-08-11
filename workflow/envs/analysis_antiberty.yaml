@@ -1,0 +1,15 @@
+name: mango-analysis-antiberty
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch=2.5.1
+  - pytorch-cuda=12.1
+  - cuda-version=12.1
+  - pandas>=2.0
+  - pip
+  - pip:
+      - antiberty==0.1.3
+      - transformers==4.57.2

@@ -1,0 +1,9 @@
+name: mango-embed-biopython
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - pytorch>=2.0
+  - numpy
+  - biopython>=1.81

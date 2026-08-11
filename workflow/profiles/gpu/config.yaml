@@ -1,0 +1,14 @@
+# Local executor profile for one NVIDIA GPU (not Slurm).
+cores: 8
+resources:
+  - gpu=1
+  - embedder_slot=1
+  - weight_download=1
+  - mem_mb=60000
+software-deployment-method: conda
+conda-prefix: .snakemake/conda-gpu
+rerun-incomplete: true
+printshellcmds: true
+show-failed-logs: true
+latency-wait: 60
+keep-going: true

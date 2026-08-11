@@ -1,0 +1,9 @@
+name: mango-process
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  # process_records falls back to parsing structures when the standardizer does
+  # not supply resolved sequences; standardize_targets always parses.
+  - biopython>=1.81

@@ -1,0 +1,13 @@
+name: mango-embed-proteinmpnn
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch=2.5.1
+  - pytorch-cuda=12.1
+  - cuda-version=12.1
+  - numpy
+  # Biopython parses the .cif backbone (ProteinMPNN's own parser is PDB-only).
+  - biopython>=1.81

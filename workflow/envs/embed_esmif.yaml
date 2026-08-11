@@ -1,0 +1,19 @@
+name: mango-embed-esmif
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch=2.5.1
+  - pytorch-cuda=12.1
+  - cuda-version=12.1
+  - numpy
+  - biopython>=1.81
+  - pip
+  - pip:
+      # ESM-IF's GVP encoder imports PyG MessagePassing and torch_scatter.
+      # Match the compiled extension exactly to PyTorch 2.5 / CUDA 12.1.
+      - torch-geometric==2.6.1
+      - https://data.pyg.org/whl/torch-2.5.1+cu121/torch_scatter-2.1.2+pt25cu121-cp311-cp311-linux_x86_64.whl
+      - fair-esm==2.0.0

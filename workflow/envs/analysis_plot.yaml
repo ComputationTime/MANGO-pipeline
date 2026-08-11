@@ -1,0 +1,8 @@
+name: mango-analysis-plot
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy
+  - matplotlib-base>=3.8

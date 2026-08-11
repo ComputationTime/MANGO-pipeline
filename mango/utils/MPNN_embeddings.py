@@ -75,7 +75,15 @@ class ProteinMPNN_Encoder(nn.Module):
             augment_eps=bb_perturbation,
             dropout=0.1, 
             ca_only=self.ca_only
-        ) # Model weights are already frozen because they don't require grad
+        )
+        # The contributed implementation built the correct architecture but
+        # never applied the pretrained checkpoint, leaving random Xavier
+        # weights. Load strictly so an upstream checkpoint/API mismatch fails
+        # instead of silently producing meaningless embeddings.
+        self.load_state_dict(checkpoint['model_state_dict'], strict=True)
+        self.eval()
+        for parameter in self.parameters():
+            parameter.requires_grad_(False)
 
     def _load_ProteinMPNN(self, num_letters, node_features, edge_features,
         hidden_dim, num_encoder_layers=3, num_decoder_layers=3,

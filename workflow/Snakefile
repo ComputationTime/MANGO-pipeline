@@ -1,0 +1,84 @@
+# =============================================================================
+# MANGO -- top-level Snakefile
+# =============================================================================
+# "How does the choice of antigen representation affect de novo generation?"
+#
+# THE TASK, everywhere in this pipeline: given the ANTIGEN and the LIGHT chain,
+# predict the HEAVY chain. Training, evaluation, reconstruction and de novo
+# generation all condition on that same pair, and the heavy chain is never an
+# input -- the antibody context embedding is built with the heavy slot masked.
+#
+# The pipeline trains one model per antigen representation, identical in every
+# other respect, then compares them. Modules are separate .smk files so each
+# stage can be developed and reasoned about on its own:
+#
+#   fetch        download + stage the raw dataset
+#   standardize  raw -> one dataset-agnostic table   (swap datasets here)
+#   process      filter, resolve sequences, assign train/val/test  [checkpoint]
+#   embed        active antigen representation + constant antibody context
+#   model        train / evaluate / predict / generate, one run per embedder
+#
+# The repository default activates only the one-hot antigen baseline. The
+# config/gpu.yaml overlay activates the five validated, non-gated methods and
+# batches their embeddings for one local NVIDIA GPU. Figures 1, 3, 4 and 5 are
+# available through the explicit `analysis` target. Therapeutic targets,
+# structure prediction (figure 2), and TAP remain deferred.
+#
+# All experiment options live in config/config.yaml -- the global state file.
+# Nothing below hardcodes a path, a model size, or a split name.
+#
+# Common invocations
+# ------------------
+#   snakemake --sdm conda --cores 1  fetch          # dataset only
+#   snakemake --sdm conda --cores 8  process        # -> records.csv
+#   snakemake --sdm conda --cores 8  embed          # active embedder
+#   snakemake --sdm conda --cores 8  train          # -> runs/<tag>__<hash>/
+#   snakemake --sdm conda --cores 8  evaluate       # -> eval.json
+#   snakemake --sdm conda --cores 8  inference      # evaluate + reconstruct
+#   snakemake --sdm conda --cores 8  generate       # explicit; potentially large
+#   snakemake --sdm conda --cores 8  analysis       # explicit handbook figures
+#
+#   snakemake --cores 1 -n            # dry run: see the DAG without running it
+#   snakemake --cores 1 --dag | dot -Tpng > dag.png
+#
+# Widen the study by adding tags to `active_embedders` in the config; the DAG
+# grows to match with no changes here.
+
+from snakemake.utils import min_version
+
+min_version("9.0")
+
+configfile: "config/config.yaml"
+
+
+include: "rules/common.smk"
+include: "rules/fetch.smk"
+include: "rules/standardize.smk"
+include: "rules/process.smk"
+include: "rules/embed.smk"
+include: "rules/model.smk"
+include: "rules/analysis/cohorts.smk"
+include: "rules/analysis/likelihood.smk"
+include: "rules/analysis/ab_likeness.smk"
+include: "rules/analysis/germline.smk"
+include: "rules/analysis/developability.smk"
+include: "rules/analysis/plots.smk"
+include: "rules/analysis/targets.smk"
+include: "rules/gpu.smk"
+
+
+# Convenience alias so `snakemake fetch` triggers the dataset download.
+rule fetch:
+    input:
+        FETCH_MARKER,
+
+
+# Other named targets are defined in their own modules.
+
+
+# Default target: a trained baseline plus held-out evaluation and heavy-chain
+# reconstruction. Large de novo generation remains opt-in via `generate`.
+rule all:
+    input:
+        rules.inference.input,
+    default_target: True

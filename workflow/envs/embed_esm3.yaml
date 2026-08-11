@@ -1,0 +1,20 @@
+name: mango-embed-esm3
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  # ESM 3.1.x still imports torchtext. Its final compatible release is paired
+  # with PyTorch 2.3; qualify channels so Conda cannot substitute CPU builds.
+  - pytorch=2.3.0
+  - torchvision=0.18.0
+  - torchtext=0.18.0
+  - pytorch-cuda=12.1
+  - cuda-version=12.1
+  - numpy
+  - pip
+  - pip:
+      # Biohub's ESM3 package. MUST stay isolated from fair-esm because both
+      # own the top-level `esm` import. Pin the audited upstream revision.
+      - esm @ git+https://github.com/evolutionaryscale/esm.git@c6b8c342aa99c823cd63ff11e0047ccd2f962117

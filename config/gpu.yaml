@@ -1,0 +1,24 @@
+# Single-NVIDIA-GPU production overlay. Run through ./run_gpu.sh study.
+# GPU-heavy jobs declare gpu=1 and the local profile exposes exactly one GPU
+# resource, so model loads and training runs are serialized on an RTX A6000.
+experiment:
+  name: "mango_gpu_study"
+
+active_embedders:
+  - one_hot
+  - biopython
+  - esm2
+  - esmif
+  - proteinmpnn
+
+execution:
+  min_gpu_memory_gb: 20
+  # One long-lived process per representation. This avoids reloading a 650M
+  # parameter model for every one of ~15k structures.
+  batch_embeddings: true
+
+model:
+  retrain: true
+
+analysis:
+  embedders: null

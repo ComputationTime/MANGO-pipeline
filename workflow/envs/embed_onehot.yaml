@@ -1,0 +1,8 @@
+name: mango-embed-onehot
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - pytorch>=2.0
+  - numpy

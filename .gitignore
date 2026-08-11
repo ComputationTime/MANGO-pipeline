@@ -1,9 +1,12 @@
-trained_models/
+/trained_models/
 *__pycache__/
-analysis/
-archive/
+/analysis/
+/archive/
 
-*test.py
-*config.py
+/*test.py
+/*config.py
 
-utils/configs.py
+/utils/configs.py
+# Snakemake working directory
+.snakemake/
+artifacts/

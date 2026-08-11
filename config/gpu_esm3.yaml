@@ -1,0 +1,12 @@
+# Optional overlay for ESM3. Requires accepting the esm3-sm-open-v1 terms on
+# Hugging Face and exporting HF_TOKEN before running.
+active_embedders:
+  - one_hot
+  - biopython
+  - esm2
+  - esm3
+  - esmif
+  - proteinmpnn
+
+analysis:
+  embedders: null

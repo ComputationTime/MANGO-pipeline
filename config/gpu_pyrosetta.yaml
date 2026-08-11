@@ -1,0 +1,12 @@
+# Opt-in PyRosetta PRE overlay. The isolated rule environment installs the
+# quarterly academic/non-commercial distribution from RosettaCommons.
+active_embedders:
+  - one_hot
+  - biopython
+  - pyrosetta_pre
+  - esm2
+  - esmif
+  - proteinmpnn
+
+analysis:
+  embedders: null

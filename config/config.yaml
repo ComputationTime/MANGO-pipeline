@@ -1,0 +1,267 @@
+# =============================================================================
+# MANGO -- GLOBAL STATE FILE
+# =============================================================================
+# Single source of truth for the whole study: every hyperparameter and every
+# experiment option lives here. Rules and scripts stay generic -- never hardcode
+# a path, a model size, or a split name inside workflow/.
+#
+# The long-term experimental axis is `embedders`: multiple antigen
+# representations, one trained model each, identical in every other respect.
+# The first milestone activates only the one-hot baseline and covers training,
+# inference, and the sequence-only handbook figures. Additional antigen
+# representations, structure prediction, and TAP are deferred.
+#
+# Study design (3rdYear_NIH_Grant_Style.pdf):
+#   Aim 1 -> train 8 models differing only in antigen representation
+#   Aim 2 -> generate de novo designs vs. held-out therapeutic targets, screen
+#   Aim 3 -> fold designs in complex, score with structure-based filters
+# =============================================================================
+
+experiment:
+  name: "mango_agrep_v1"
+  # Global seed. Individual modules may derive sub-seeds from this.
+  seed: 13
+
+# Execution policy. Normal workstation runs may fall back to CPU. The cloud-GPU
+# overlay and run_gpu.sh set MANGO_REQUIRE_CUDA=1 and perform a fail-fast CUDA
+# preflight before scientific jobs start.
+execution:
+  min_gpu_memory_gb: 20
+
+# --- Dataset -----------------------------------------------------------------
+dataset:
+  # Selects the fetcher + standardizer adapter pair. Add a new dataset by adding
+  # scripts/fetch_<name>.py and scripts/standardize_<name>.py.
+  name: "sabdab2"
+  version: "0.1.0"
+  zenodo_url: "https://zenodo.org/api/records/20083995/files/splits.tar.gz/content"
+  # Everything the pipeline writes lives under here.
+  artifact_root: "artifacts"
+  # Which split table drives the pipeline.
+  #   abag_split.csv -> antigen-aware split (use this for MANGO)
+  #   ab_split.csv   -> antibody-only split
+  #   *_sd.csv       -> single-domain-only variants
+  split_file: "abag_split.csv"
+  split_column: "ab_ag_split"
+
+# --- Processing (standardized.csv -> records.csv) ----------------------------
+processing:
+  require_paired: true              # keep only rows with BOTH heavy and light
+  antigen_types: ["PROTEIN"]        # every antigen chain type must be in this set
+  max_antigen_len: 1000             # cap on summed resolved antigen length; null disables
+  require_structure_file: true      # drop rows whose .cif is missing
+  # Disabled in production. config/smoke.yaml enables a tiny cluster-preserving
+  # subset for end-to-end workflow checks after the full archive is fetched.
+  subset:
+    enabled: false
+    train_clusters: 4
+    test_clusters: 1
+    rows_per_cluster: 1
+  # The source split has only train/test, so val is carved out of train.
+  val:
+    # Hold out whole antibody-antigen clusters. Row-wise random splitting leaks
+    # related complexes across train and validation and is not supported.
+    strategy: "cluster"
+    fraction: 0.10                   # fraction of train clusters, not rows
+    seed: 42
+    cluster_column: "ab_ag_cluster"
+
+# --- Embedding ---------------------------------------------------------------
+embedding:
+  # Which sequence feeds sequence-based embedders.
+  #   resolved -> structurally resolved residues only (matches the .cif; keeps
+  #               all representations the same length, so they stay comparable)
+  #   expected -> full PDB-annotated sequence including unresolved residues
+  seq_source: "resolved"
+  splits: ["train", "val", "test"]
+  # Antibody side is held CONSTANT across the study -- that is the whole point.
+  antibody:
+    method: "ablang2"
+    # THE TASK: given the antigen and the LIGHT chain, predict the HEAVY chain.
+    # The antibody context embedding therefore encodes the light chain with the
+    # heavy slot masked ('*|L' in AbLang2). The heavy chain never enters the
+    # conditioning signal at any stage -- train, evaluate, predict or generate.
+    # "light_only" is the only supported value; it is spelled out here (and in
+    # the directory name) so the no-leak guarantee is visible, not implicit.
+    context: "light_only"
+
+# --- THE EXPERIMENTAL AXIS: 8 antigen representations ------------------------
+# Each key is an embedder TAG: the directory name, the run name, and the label
+# used in every figure. `method` selects which rule/script builds it; remaining
+# keys are that method's parameters. `class` groups tags in plots
+# (naive | biophysical | learned) per the grant's framing.
+embedders:
+  one_hot:
+    method: one_hot
+    class: naive
+    label: "One-hot"
+
+  biopython:
+    method: biopython
+    class: biophysical
+    label: "BioPython"
+    layout: "chain_descriptor_repeated_per_residue"
+
+  pyrosetta_pre:
+    method: pyrosetta_pre
+    class: biophysical
+    label: "PyRosetta PRE"
+    score_function: "ref2015"
+    normalize: "zscore"
+    add_chain_breaks: true
+
+  esm2:
+    method: esm2
+    class: learned
+    label: "ESM2"
+    # t6_8M t12_35M t30_150M t33_650M t36_3B t48_15B
+    size: "t33_650M"
+
+  esm3:
+    method: esm3
+    class: learned
+    label: "ESM3 (sequence)"
+    model_name: "esm3-sm-open-v1"
+    representation: "sequence"
+    requires_hf_token: true
+
+  esmif:
+    method: esmif
+    class: learned
+    label: "ESM-IF"
+    model_name: "esm_if1_gvp4_t16_142M_UR50"
+
+  proteinmpnn:
+    method: proteinmpnn
+    class: learned
+    label: "ProteinMPNN"
+    model: "vanilla_models"         # vanilla_models | ca_models | soluble_models
+    noise: 2                        # 2 | 10 | 20 | 30
+
+  afm:
+    method: afm
+    class: learned
+    label: "AF-M"
+    representation: "single"        # single | pair | structure
+    # AF-M is folded on exactly the conditioning information the model gets:
+    # the antigen chains PLUS the light chain. The heavy chain is never given
+    # to AF-M, so its representation cannot leak the prediction target.
+    # Consequence: this is the one embedder whose L spans more than the antigen
+    # (L = antigen residues + light residues + separators). Cross-attention does
+    # not require a common L, but keep it in mind when comparing lengths.
+    include_light_chain: true
+
+# First milestone: prove the complete train/inference path with the simplest
+# antigen representation. Additional embedders remain registered above but are
+# deliberately outside the active DAG until this baseline is reliable.
+active_embedders:
+  - one_hot
+
+# --- Model (identical for every embedder; only d_Ag_rep differs) -------------
+model:
+  # Architecture follows IgLM's format per the grant: 4 layers, 8 heads (~13M).
+  # Vocab/hidden size come from mango.utils.mango_utils.MANGO_configs.
+  n_cross_attn_heads: 1
+  n_cross_attn_layers: 1
+  epochs: 5
+  lr: 1.0e-4
+  patience: 3                       # early-stop patience on val loss
+  grad_accum: 1
+  # Refresh the on-disk training-curve PNG this often during each epoch. This
+  # is reporting cadence only; validation still runs once at each epoch end.
+  loss_plot_interval: 250
+  seed: 0
+  train_splits: ["train"]
+  val_splits: ["val"]               # early stopping watches this; never test
+  predict_splits: ["test"]
+  # Reuse an existing checkpoint instead of retraining when upstream changes.
+  # Force a fresh model with: snakemake train --forcerun train
+  retrain: false
+
+# --- Aim 2: de novo generation -----------------------------------------------
+generation:
+  # Which embedded dataset split generation designs against. External
+  # therapeutic targets are deferred from the first milestone.
+  # Every design is a HEAVY chain conditioned on that structure's antigen
+  # embedding plus its light chain, so the source must supply both.
+  source: "test"
+  # Cap on how many structures from `source` are used. null => all of them.
+  # Selection is the first N ids in sorted order, so it is reproducible and
+  # inspectable. Generation is the most expensive step in the pipeline; widen
+  # this deliberately.
+  max_targets: 8
+  # Grant: 5,000 designs per target.
+  n_per_target: 5000
+
+  # Sampling. Only heavy chains are ever generated -- that is the task.
+  max_new_tokens: 130
+  do_sample: true
+  top_p: 1.0
+  temperature: 1.0
+  # Antigen-agnostic control model (grant Aim 2): IgLM prompted with the first
+  # 5 amino acids of each known binder.
+  controls:
+    iglm:
+      enabled: false
+      prompt_prefix_len: 5
+
+# --- Deferred: structure prediction of designs in complex -------------------
+structure_prediction:
+  enabled: false
+  methods: ["af3", "boltz2", "chai"]
+  # Handbook figure 2: n=30 designs per trained model, on a single target.
+  n_designs: 30
+  # Which of the generation structures get folded. null => the first
+  # `n_targets` ids from generation.source, so this follows whatever generation
+  # actually designed against instead of naming a PDB that may not be in play.
+  targets: null
+  n_targets: 1
+  # Scores lifted from each predictor's output.
+  scores: ["ptm", "iptm", "pae"]
+
+# --- Analysis ----------------------------------------------------------------
+analysis:
+  # Which embedder tags appear in the comparison figures. null => active_embedders.
+  embedders: null
+
+  # Figures 3-5 use the same deterministic subset of successful designs. The
+  # same design_index ranks are selected for every embedder whenever available.
+  cohort:
+    n_per_target: 100             # null => every successful design
+    seed: 13
+
+  ab_likeness:
+    iglm:
+      chain_token: "[HEAVY]"
+      species_token: "[HUMAN]"
+    antiberty:
+      batch_size: 16
+    ablang2:
+      # Paired H|L score. `confidence` is the fast, single-pass score drawn in
+      # the handbook; use pseudo_log_likelihood for a slower final analysis.
+      mode: "confidence"
+
+  germline:
+    scheme: "imgt"
+    # null searches every heavy-chain species represented in ANARCI's bundled
+    # germline database and records the selected species in the output.
+    allowed_species: null
+
+  developability:
+    charge_ph: 7.4
+
+  # Figures. Each maps to a pure plot script under scripts/analysis/ and
+  # reproduces one panel family from the handbook figure plan.
+  plots:
+    fig1_nll:            {enabled: true}   # train/test NLL vs. Ag embedding
+    fig3_ablikeness:     {enabled: true}   # IgLM / AntiBERTy / AbLang2
+    fig4_ld_germline:    {enabled: true}   # LD-from-germline distributions
+    fig5_developability: {enabled: true}   # GRAVY and charge@pH 7.4
+  format: "png"
+  dpi: 200
+
+# --- External model weights --------------------------------------------------
+weights:
+  root: "artifacts/weights"
+  ablang2_url: "https://zenodo.org/records/10185169/files/ablang2-weights.tar.gz"
+  proteinmpnn_repo_raw: "https://raw.githubusercontent.com/dauparas/ProteinMPNN/main"

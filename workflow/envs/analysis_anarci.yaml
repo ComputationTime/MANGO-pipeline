@@ -1,0 +1,12 @@
+name: mango-analysis-anarci
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - pandas>=2.0
+  - biopython>=1.81
+  - hmmer=3.3.2
+  # Prebuilt package includes the HMM and germline database. Installing the
+  # legacy Git repository would rebuild these from IMGT at environment creation.
+  - bioconda::anarci=2024.05.21

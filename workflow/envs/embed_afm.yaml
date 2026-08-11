@@ -1,0 +1,13 @@
+name: mango-embed-afm
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.11
+  - pytorch>=2.0
+  - numpy
+  - pandas>=2.0
+  # AlphaFold-Multimer needs weights, sequence databases and a GPU. A conda env
+  # is almost certainly the wrong packaging -- expect to replace this with a
+  # container, or to run AF externally and have the rule only ingest results.
+  # See workflow/scripts/embed_antigen_afm.py.

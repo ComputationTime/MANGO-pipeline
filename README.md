@@ -1,105 +1,278 @@
 # MANGO
-Official repository for MANGO - a multi-modal, autoregressive antibody-specific language model that generates and scores conditioned on antigen context, as described in [PAPER](https://www.google.com)
 
-![Model Logo](mango/utils/images/MANGO.png)
+MANGO is a Snakemake workflow for training an antigen-conditioned antibody
+language model. Its single task is:
 
-## Setup 
-To use MANGO, install via pip: 
+> Given an antigen and a light chain, generate the heavy chain.
+
+The heavy chain is never part of the conditioning input. The antibody context
+embedding is produced by AbLang2 from `*|L`, where the heavy-chain slot is
+masked. Training, evaluation, held-out reconstruction, and de novo generation
+all use that same input contract.
+
+The Snakemake workflow is the canonical interface. The older
+`mango/MANGORunner.py` API is legacy code and is not the supported execution
+path for the current model.
+
+## Current milestone
+
+The repository default remains the one-hot baseline. The single-GPU study
+profile expands that same DAG to every currently runnable, non-gated antigen
+representation: one-hot, BioPython, ESM2, ESM-IF, and ProteinMPNN.
+
+```text
+fetch → standardize → process → embed → train → evaluate
+                                      └──────→ predict
+                                      └──────→ generate (explicit target)
+                                                  └→ cohort → metrics → figures
+```
+
+- `process` creates a validation set by holding out complete
+  `ab_ag_cluster` groups. Row-wise random validation is deliberately rejected.
+- `embed` builds the selected antigen embeddings and masked-heavy/light-chain
+  AbLang2 context embeddings. AbLang2 weights are downloaded once to
+  `artifacts/weights/ABLANG-ablang2-paired`, never by individual embed jobs.
+- `train` optimizes only heavy-chain tokens.
+- `evaluate` reports heavy-chain NLL and perplexity on train, validation, and
+  test splits.
+- `predict` generates one heavy-chain reconstruction for every configured
+  held-out record.
+- `generate` produces the configured number of de novo heavy chains for a
+  bounded set of held-out records.
+- `analysis` is explicit and produces handbook Figures 1, 3, 4, and 5. Figure 2
+  and TAP are not dependencies of this target.
+
+ESM3 is an opt-in sixth representation because its weights require accepting
+the Hugging Face terms and supplying a token. PyRosetta PRE is a seventh,
+academic/non-commercial opt-in and still needs a real mmCIF smoke validation.
+AF-M is a stub. Therapeutic targets, structure prediction, Figure 2, and TAP
+remain deferred.
+
+## Repository layout
+
+```text
+config/config.yaml             experiment configuration
+workflow/Snakefile             canonical workflow entrypoint
+workflow/rules/                stage definitions
+workflow/scripts/              executable stage implementations
+workflow/envs/                 isolated rule environments
+mango/utils/                   model components used by the workflow
+tests/                         fast contract tests
+artifacts/                     generated data and models; ignored by Git
+```
+
+All generated files live under `artifacts/`. A trained run is identified by an
+embedder tag and a hash of the dataset, processing, embedding, and model
+configuration:
+
+```text
+artifacts/runs/one_hot__<hash>/
+├── config.json
+├── model_config.json
+├── metrics.jsonl
+├── training_curve.csv
+├── training_curve.png
+├── checkpoints/best.pt
+├── checkpoints/latest.pt
+├── eval.json
+└── predictions_test.csv
+```
+
+## Environment
+
+Create the workflow driver environment:
+
 ```bash
-pip install gray_mango
+conda env create -f environment.yaml
+conda activate mango
 ```
 
-Alternatively, you can clone this repository and install locally
+Per-rule environments under `workflow/envs/` are the recommended execution
+mode because model dependencies stay isolated:
+
 ```bash
-git clone git@github.com:Donnievin/MANGO.git
+snakemake --sdm conda --cores 8 --dry-run
 ```
+
+## One NVIDIA GPU cloud run
+
+For a new-instance walkthrough, including every automatic weight source and
+troubleshooting step, read [docs/cloud_gpu_setup.md](docs/cloud_gpu_setup.md).
+
+An RTX A6000 is a good fit: the workflow requires at least 20 GiB and the card
+has 48 GiB. Provision a Linux instance with:
+
+- one NVIDIA GPU and a working `nvidia-smi`;
+- NVIDIA driver 525.60.13 or newer (the rule environments use CUDA 12.1);
+- Conda or Miniforge, Git, and Bash;
+- at least 64 GiB system RAM and preferably 150 GiB free disk;
+- outbound HTTPS access on the first run for Conda packages and model weights.
+
+The host does not need a separately installed CUDA toolkit: the isolated Conda
+environments carry the CUDA runtime. From the repository root, first run the
+five-record plumbing check:
 
 ```bash
-cd MANGO
-bash install_mango.sh
+./run_gpu.sh smoke
 ```
 
-## Usage
+Then launch the full filtered SAbDab2 study with one command:
 
-### Generation using only Antigen structure
-To generate 100 unpaired sequences using MANGO conditioned on Antigen structure, use the following code:
-
-```python
-from mango import MANGORunner
-
-model = MANGORunner(ag_representation='One_hot')
-
-antigen_pdb_path = 'test.pdb'
-chains_to_generate = 'H'
-num_to_generate = 100
-
-# antigen_pdb_path, prompt_sequence=None, chains_to_generate='H', num_to_generate=10, top_p=1, temperature=1, ag_cold_spots=None, ag_hot_spots=None,
-sequences = model.generate(
-    antigen_pdb_path=antigen_pdb_path, NA_seqs,
-    chains_to_generate=chains_to_generate,
-    num_to_generate=num_to_generate,
-    )
-
-print(sequences)
+```bash
+./run_gpu.sh study
 ```
 
-`Note`: Currently available ag_representations are: `One_hot`, `ESM2_*`, `ProteinMPNN (ca_models, vanilla_models, soluble_models)`, `PyRosetta_PRE`, `Biophysics`,
+The launcher creates its own pinned Snakemake driver, checks CUDA with a real
+matrix multiplication, creates isolated CUDA environments, downloads and
+verifies all active embedder weights, downloads/reuses SAbDab2, embeds, trains one model per representation,
+evaluates, reconstructs held-out heavy chains, generates the configured design
+cohort, and writes Figures 1, 3, 4, and 5. GPU jobs request a single shared
+`gpu=1` resource, so the representations run sequentially. In GPU mode each
+embedder is one restartable batch and loads its pretrained model once rather
+than once per structure.
 
+Each run also writes `training_curve.csv` at every training iteration and
+atomically refreshes `training_curve.png` every 250 iterations and after each
+validation pass. The x-axis is the global training iteration. Training loss is
+shown per iteration (plus a rolling mean), while validation loss is evaluated
+once per epoch and plotted at that epoch's final iteration.
 
-### Generation using Antigen structure and a complement chain
-BANANA provides rich antibody embeddings (via PyTorch tensors) of shape `[Nseqs x 300 x Hdim]` that consider the amino acid sequence, the DNA sequence, and the organism of origin. To gather these embeddings, use the following code:  
+Every invocation writes a report and a flat numbers table:
 
-```python
-from mango import MANGORunner
-
-model = MANGORunner(ag_representation='One_hot')
-
-antigen_pdb_path = 'test.pdb'
-prompt_sequence = 'EVQLVESGGGLVQPGGSLRLSCAASGFNIKEYYMHWVRQAPGKGLEWVGLIDPEQGNTIYDPKFQDRATISADNSKNTAYLQMNSLRAEDTAVYYCARDTAAYFDYWGQGTLVTVS'
-chains_to_generate = 'L'
-num_to_generate = 100
-
-# antigen_pdb_path, prompt_sequence=None, chains_to_generate='H', num_to_generate=10, top_p=1, temperature=1, ag_cold_spots=None, ag_hot_spots=None,
-sequences = model.generate(
-    antigen_pdb_path=antigen_pdb_path, NA_seqs,
-    prompt_sequence=prompt_sequence
-    chains_to_generate=chains_to_generate,
-    num_to_generate=num_to_generate,
-    )
-
-print(sequences)
+```text
+artifacts/gpu/results_report.json
+artifacts/gpu/results_report.csv
 ```
 
+The launcher runs each embedder in a separate Snakemake invocation, including
+its Conda environment creation. A failed package install, weight download, or
+scientific job therefore cannot prevent later embedders from being attempted.
+The report lists the failed method and stage while retaining split NLL,
+perplexity, example/token counts, and prediction counts for every core run that
+completed. It separately flags a core-complete run whose analysis metrics are
+incomplete. The launcher returns a nonzero exit status for automation, but
+writes the partial report first. Cross-embedder figures may remain unavailable
+when one required branch fails.
 
-### Sequence scoring using Antigen structure
-To forward translate Amino Acid sequences into the corresponding DNA sequence, use the following code: 
+Strict successful completion is additionally recorded at:
 
-```python
-from mango import MANGORunner
-
-model = MANGORunner(ag_representation='One_hot')
-
-antigen_pdb_path = 'test.pdb'
-chains_to_score = 'L'
-
-# antigen_pdb_path, sequences=None, chains_to_score='H', ag_cold_spots=None, ag_hot_spots=None,
-sequences = model.log_likelihood(
-    antigen_pdb_path=antigen_pdb_path, NA_seqs,
-    sequences=sequences,
-    chains_to_generate=chains_to_generate,
-    num_to_generate=num_to_generate,
-    )
-
-print(sequences)
+```text
+artifacts/gpu/results_complete.json
 ```
 
+The completion manifest lists every run, evaluation, prediction table, figure,
+and the GPU/driver preflight report. Snakemake keeps successful outputs, so rerunning
+the same command resumes missing work. Batch embedding also reuses valid
+per-record outputs after an interrupted batch.
 
-## Citing this work
-```bibtex
-@article{vincent2026MANGO,
-    title = {Naive versus Learned versus biophysical embeddings: The effect of antigen representation on generating developabe antibodies},
-    author = {Vincet Jr, Donovan and Fortes, Andre and Sanghvi, Tanay and Gray, Jeffrey J},
-    journal = {???},
-    year= {2026}
-}
+To include ESM3, first accept access to `esm3-sm-open-v1`, then export the
+standard Hugging Face token and choose the corresponding mode:
+
+```bash
+export HF_TOKEN=...
+./run_gpu.sh smoke-esm3
+./run_gpu.sh study-esm3
 ```
+
+Do not start with `study-esm3`: validate the token, environment, and model
+download with `smoke-esm3` first.
+
+PyRosetta and combined modes follow the same pattern:
+
+```bash
+./run_gpu.sh smoke-pyrosetta   # then study-pyrosetta
+./run_gpu.sh smoke-all         # ESM3 + PyRosetta; then study-all
+```
+
+To check only environments, connectivity, authorization, and weights:
+
+```bash
+./run_gpu.sh weights           # or weights-esm3 / weights-pyrosetta / weights-all
+```
+
+The `fetch` dependency downloads and extracts SAbDab2 automatically from the
+configured Zenodo record. Zenodo distributes one archive (about 876 MB
+compressed), so even a small processed subset requires the complete archive
+once; subsequent runs reuse `artifacts/data/sabdab2_v0.1.0/`.
+
+## Running the workflow
+
+Run from the repository root. Snakemake automatically discovers
+`workflow/Snakefile`.
+
+```bash
+# Individual checkpoints
+snakemake --sdm conda --cores 8 fetch
+snakemake --sdm conda --cores 8 weights
+snakemake --sdm conda --cores 8 process
+snakemake --sdm conda --cores 8 embed
+snakemake --sdm conda --cores 8 train
+
+# Train if needed, then evaluate and reconstruct held-out heavy chains
+snakemake --sdm conda --cores 8 inference
+
+# Equivalent default invocation
+snakemake --sdm conda --cores 8
+
+# Potentially large; intentionally not part of the default target
+snakemake --sdm conda --cores 8 generate
+
+# Generate if needed, score a deterministic cohort, and render figures 1/3/4/5
+snakemake --sdm conda --cores 8 analysis
+
+# Five-row, cluster-separated, one-epoch end-to-end smoke run
+snakemake --configfile config/smoke.yaml --sdm conda --cores 4 analysis
+```
+
+The main settings are in `config/config.yaml`. In particular:
+
+- `active_embedders` is restricted to `one_hot` in the repository default;
+  `config/gpu.yaml` selects the five supported cloud representations.
+- `processing.val.cluster_column` identifies the leakage boundary;
+  `processing.val.fraction` is the fraction of training clusters held out.
+- `model.*` controls training and early stopping.
+- `model.predict_splits` controls held-out reconstruction.
+- `generation.max_targets` and `generation.n_per_target` bound de novo
+  generation.
+- `analysis.cohort.n_per_target` bounds the common sequence-scoring cohort.
+- `analysis.ab_likeness`, `analysis.germline`, and
+  `analysis.developability` configure the independent metric modules.
+
+Analysis outputs are separated by contract:
+
+```text
+artifacts/analysis/<run>/cohort.csv
+artifacts/analysis/<run>/metrics/{iglm,antiberty,ablang2,germline,biophysical}.csv
+artifacts/analysis/figures/fig{1,3,4,5}_*.{png,csv}
+```
+
+Figure 4 uses the pinned Bioconda ANARCI database to assign the nearest heavy
+V and J germlines. It records the gene calls, reconstructed V/J reference,
+raw Levenshtein distance, and length-normalized distance for every design.
+
+## Tests
+
+Run the lightweight contract tests inside an environment containing pandas:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Before a full run, also validate the workflow itself:
+
+```bash
+snakemake --lint
+snakemake --sdm conda --cores 1 --dry-run
+```
+
+## Deferred work
+
+AlphaFold-Multimer, Figure 2, structure prediction, therapeutic targets, and
+TAP are not included by the GPU completion target. PyRosetta PRE and ESM3 are
+available only through explicit opt-in modes. ESM3 and ESM-IF
+were adapted from the contributed `mango-embedders` module. ESM3 remains
+sequence-only and gated; ESM-IF encodes antigen chains independently rather
+than as a joint multichain complex.
+
+The intended AF3/Boltz/Chai integration is documented in
+`docs/structure_prediction_plan.md`.

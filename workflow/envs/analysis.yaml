@@ -1,0 +1,15 @@
+# Legacy combined environment. Active analysis rules use analysis_*.yaml.
+name: mango-analysis
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy
+  - matplotlib-base>=3.8
+  - biopython>=1.81
+  # Optional screening metrics (see config.analysis.seq_metrics). Absent tools
+  # degrade to NaN columns with a status, they do not fail the run:
+  #   - anarci   (germline assignment -> fig 4)
+  #   - iglm     (antigen-agnostic control + confidence -> fig 3)
+  #   - ablang2  (antibody-likeness confidence -> fig 3)

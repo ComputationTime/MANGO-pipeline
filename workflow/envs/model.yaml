@@ -1,0 +1,17 @@
+name: mango-model
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch=2.5.1
+  - pytorch-cuda=12.1
+  - cuda-version=12.1
+  - numpy
+  - pandas>=2.0
+  - matplotlib-base
+  - einops
+  - pip
+  - pip:
+      - transformers==4.57.2

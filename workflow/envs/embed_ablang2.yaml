@@ -1,0 +1,15 @@
+name: mango-embed-ablang2
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pytorch=2.5.1
+  - pytorch-cuda=12.1
+  - cuda-version=12.1
+  - numpy
+  - pip
+  - pip:
+      # Weights are staged once by fetch_ablang2_weights; pin the loader API.
+      - ablang2==0.2.1

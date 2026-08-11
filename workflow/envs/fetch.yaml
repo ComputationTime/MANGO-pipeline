@@ -1,0 +1,7 @@
+# Minimal environment for the fetch rule. Only stdlib is used by the script,
+# so this just pins a Python interpreter for Snakemake's conda integration.
+name: mango-fetch
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
