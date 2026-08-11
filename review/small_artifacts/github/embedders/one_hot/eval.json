@@ -1,0 +1,32 @@
+{
+  "checkpoint_epoch": 1,
+  "checkpoint_val_loss": 2.6696901321411133,
+  "d_ag": 21,
+  "embedder": "one_hot",
+  "experiment_hash": "eccb90c8",
+  "run_id": "one_hot__eccb90c8",
+  "splits": {
+    "test": {
+      "n_examples": 4,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 483,
+      "nll": 2.7550832741502402,
+      "perplexity": 15.722350113636622
+    },
+    "train": {
+      "n_examples": 16,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 1950,
+      "nll": 2.564454103494302,
+      "perplexity": 12.993563292459985
+    },
+    "val": {
+      "n_examples": 4,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 486,
+      "nll": 2.6697982211171847,
+      "perplexity": 14.437055805891132
+    }
+  },
+  "task": "antigen+light->heavy"
+}
