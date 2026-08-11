@@ -28,12 +28,18 @@ MPNN_MAX_LENGTH = 20000
 
 
 def load_runtime(weights: str, model: str, noise: int):
-    dc.get_device(f"ProteinMPNN {model} embedding")
+    device = dc.get_device(f"ProteinMPNN {model} embedding")
     mp = ec.import_mango_mpnn()
     mp.CHECKPOINTS.setdefault(model, {})[int(noise)] = weights
     encoder = mp.ProteinMPNN_Encoder(
         model=model, noise=int(noise), bb_perturbation=0.0
     )
+    # The contributed class records a CUDA ``self.device`` and loads the
+    # checkpoint with that map location, but constructs its nn.Module layers
+    # on CPU and never moves them.  Featurization correctly follows
+    # ``encoder.device``, so explicitly colocate the module and its inputs.
+    encoder = encoder.eval().to(device)
+    encoder.device = device
     return mp, encoder
 
 

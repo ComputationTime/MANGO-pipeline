@@ -1,0 +1,32 @@
+{
+  "checkpoint_epoch": 0,
+  "checkpoint_val_loss": 3.111856698989868,
+  "d_ag": 1280,
+  "embedder": "esm2",
+  "experiment_hash": "83a2d8f5",
+  "run_id": "esm2__83a2d8f5",
+  "splits": {
+    "test": {
+      "n_examples": 1,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 121,
+      "nll": 3.201434373855591,
+      "perplexity": 24.567744266067972
+    },
+    "train": {
+      "n_examples": 3,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 360,
+      "nll": 2.9740818586614397,
+      "perplexity": 19.571645461022065
+    },
+    "val": {
+      "n_examples": 1,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 122,
+      "nll": 3.111856698989868,
+      "perplexity": 22.462712201548605
+    }
+  },
+  "task": "antigen+light->heavy"
+}

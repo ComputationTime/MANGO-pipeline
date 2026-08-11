@@ -7,10 +7,16 @@ what makes swapping in another dataset a one-file change.
 SAbDab2 separates multi-chain antigen fields with "/"; the standardized table
 uses "," throughout (standardize_common.SEP).
 
-SAbDab2 already ships structurally *resolved* sequences alongside the expected
-ones, so we carry them through as optional columns (resolved_H_seq,
-resolved_L_seq, resolved_ag_seq). `process` prefers them over re-parsing the
-.cif files, which saves parsing ~15k structures.
+The generation target is the IMGT-numberable variable heavy domain (VH), not
+the full deposited heavy chain.  SAbDab2 supplies that target directly as
+``VH_numerable_seq``.  Both expected_heavy_seq and resolved_H_seq use this same
+VH sequence so training, evaluation, reconstruction and generation share one
+unambiguous target contract.  The deposited full-heavy sequences are retained
+under source_* provenance columns but never become model targets.
+
+SAbDab2 also ships structurally resolved light and antigen sequences. `process`
+prefers these passthrough columns over re-parsing the .cif files, which saves
+parsing ~15k structures.
 """
 
 import sys
@@ -27,7 +33,7 @@ SRC_SEP = "/"
 REQUIRED_SRC = {
     "INSTANCE": "id",
     "agchains": "antigen_chains",
-    "Hseq_expected": "expected_heavy_seq",
+    "VH_numerable_seq": "expected_heavy_seq",
     "Lseq_expected": "expected_light_seq",
     "agexpectedseqs": "expected_ag_seq",
 }
@@ -38,7 +44,9 @@ PASSTHROUGH_SRC = {
     "Hchain": "heavy_chain",
     "Lchain": "light_chain",
     "agtypes": "antigen_types",
-    "Hseq": "resolved_H_seq",
+    "VH_numerable_seq": "resolved_H_seq",
+    "Hseq": "source_resolved_full_heavy_seq",
+    "Hseq_expected": "source_expected_full_heavy_seq",
     "Lseq": "resolved_L_seq",
     "agresolvedseqs": "resolved_ag_seq",
     "type": "ab_type",

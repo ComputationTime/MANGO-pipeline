@@ -1,0 +1,41 @@
+# Intermediate validation run between the five-record smoke test and the full
+# SAbDab2 study.  It preserves cluster-aware splitting and exercises multiple
+# batches, two train/validation epochs, checkpoint updates, generation, and all
+# enabled analysis outputs without committing to the production-scale run.
+experiment:
+  name: "mango_small"
+
+processing:
+  max_antigen_len: 500
+  subset:
+    enabled: true
+    train_clusters: 20
+    test_clusters: 4
+    rows_per_cluster: 1
+  val:
+    strategy: "cluster"
+    fraction: 0.20
+    seed: 42
+    cluster_column: "ab_ag_cluster"
+
+model:
+  epochs: 2
+  patience: 2
+  retrain: true
+  loss_plot_interval: 10
+
+generation:
+  max_targets: 2
+  n_per_target: 5
+  max_new_tokens: 60
+  do_sample: true
+  top_p: 0.9
+  temperature: 1.0
+
+analysis:
+  cohort:
+    n_per_target: 5
+    seed: 13
+  ab_likeness:
+    ablang2:
+      mode: "confidence"

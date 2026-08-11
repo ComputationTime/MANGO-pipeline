@@ -1,10 +1,14 @@
 name: mango-embed-pyrosetta
 channels:
-  - conda-forge
   - pytorch
+  - conda-forge
 dependencies:
   - python=3.11
-  - pytorch>=2.0
+  # PRE scoring is CPU-only; torch is used only to serialize the resulting
+  # tensor. Pin the small CPU build instead of allowing Conda to select a newer
+  # multi-gigabyte CUDA libtorch from conda-forge.
+  - pytorch::pytorch=2.5.1
+  - pytorch::cpuonly
   - numpy
   - pip
   - pip:

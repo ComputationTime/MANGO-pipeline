@@ -1,0 +1,32 @@
+{
+  "checkpoint_epoch": 0,
+  "checkpoint_val_loss": 3.1194393634796143,
+  "d_ag": 11,
+  "embedder": "biopython",
+  "experiment_hash": "6c1b9439",
+  "run_id": "biopython__6c1b9439",
+  "splits": {
+    "test": {
+      "n_examples": 1,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 121,
+      "nll": 3.116889715194702,
+      "perplexity": 22.576052378282654
+    },
+    "train": {
+      "n_examples": 3,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 360,
+      "nll": 3.028571452034844,
+      "perplexity": 20.667686708768038
+    },
+    "val": {
+      "n_examples": 1,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 122,
+      "nll": 3.1194393634796143,
+      "perplexity": 22.633686814057146
+    }
+  },
+  "task": "antigen+light->heavy"
+}

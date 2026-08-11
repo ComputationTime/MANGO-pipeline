@@ -194,7 +194,10 @@ generation:
   n_per_target: 5000
 
   # Sampling. Only heavy chains are ever generated -- that is the task.
-  max_new_tokens: 130
+  # SAbDab2's IMGT-numberable VH targets currently span up to 171 aa. Leave
+  # room for the longest observed VH plus EOS so ceiling hits are not mistaken
+  # for learned termination.
+  max_new_tokens: 180
   do_sample: true
   top_p: 1.0
   temperature: 1.0

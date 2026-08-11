@@ -1,15 +1,14 @@
 name: mango-analysis-antiberty
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
 dependencies:
   - python=3.11
-  - pytorch=2.5.1
-  - pytorch-cuda=12.1
-  - cuda-version=12.1
   - pandas>=2.0
   - pip
   - pip:
+      # Transformers refuses legacy PyTorch .bin checkpoints with torch<2.6
+      # after CVE-2025-32434.  PyTorch stopped publishing Conda binaries at
+      # 2.5, so this isolated scorer intentionally uses the official wheel.
+      - torch==2.6.0
       - antiberty==0.1.3
       - transformers==4.57.2

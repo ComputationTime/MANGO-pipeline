@@ -22,7 +22,7 @@ import device_common as dc
 def load_runtime(model_name):
     try:
         import esm
-        from esm.inverse_folding.util import get_encoder_output
+        from esm.inverse_folding.util import CoordBatchConverter
     except ImportError as exc:
         raise ImportError(
             "ESM-IF requires fair-esm and its inverse-folding dependencies; "
@@ -32,6 +32,22 @@ def load_runtime(model_name):
         raise ValueError(f"unsupported ESM-IF model {model_name!r}")
     device = dc.get_device(f"ESM-IF {model_name} embedding")
     model, alphabet = getattr(esm.pretrained, model_name)()
+
+    # fair-esm's public get_encoder_output() omits CoordBatchConverter's
+    # device argument.  That works on CPU, but leaves coords/padding/confidence
+    # on CPU after the model is moved to CUDA.  Keep the exact upstream logic
+    # while placing every converter tensor beside the model.
+    def get_encoder_output(model, alphabet, coords):
+        converter = CoordBatchConverter(alphabet)
+        model_device = next(model.parameters()).device
+        coords, confidence, _, _, padding_mask = converter(
+            [(coords, None, None)], device=model_device
+        )
+        encoder_out = model.encoder.forward(
+            coords, padding_mask, confidence, return_all_hiddens=False
+        )
+        return encoder_out["encoder_out"][0][1:-1, 0]
+
     return model.eval().to(device), alphabet, get_encoder_output
 
 

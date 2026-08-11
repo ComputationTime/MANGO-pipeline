@@ -1,8 +1,12 @@
 name: mango-embed-onehot
 channels:
-  - conda-forge
   - pytorch
+  - conda-forge
 dependencies:
   - python=3.11
-  - pytorch>=2.0
+  # Pin the tensor serialization ABI to the training stack. An open lower
+  # bound can resolve to a future CUDA/libtorch build even though this adapter
+  # itself has no learned weights.
+  - pytorch::pytorch=2.5.1
+  - pytorch::cpuonly
   - numpy

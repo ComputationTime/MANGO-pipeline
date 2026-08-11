@@ -1,9 +1,11 @@
 name: mango-embed-biopython
 channels:
-  - conda-forge
   - pytorch
+  - conda-forge
 dependencies:
   - python=3.11
-  - pytorch>=2.0
+  # Keep saved tensor files on the same tested ABI as the training runtime.
+  - pytorch::pytorch=2.5.1
+  - pytorch::cpuonly
   - numpy
   - biopython>=1.81

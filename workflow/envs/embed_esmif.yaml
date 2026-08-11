@@ -7,13 +7,23 @@ dependencies:
   - python=3.11
   - pytorch=2.5.1
   - pytorch-cuda=12.1
-  - cuda-version=12.1
-  - numpy
+  # fair-esm 2.0 imports Biotite's legacy filter_backbone API. Biotite 0.41.2
+  # provides it, but its extension wheels were built against NumPy 1.x.
+  - numpy=1.26.4
+  # fair-esm's inverse-folding loader imports scipy.spatial.transform while
+  # constructing the GVP model, before any structure is embedded.
+  - scipy
   - biopython>=1.81
   - pip
   - pip:
+      # The legacy release is no longer present in current Conda repodata but
+      # remains available as a CPython 3.11 wheel from PyPI.  Keep NumPy 1.26
+      # in Conda above because this Biotite wheel was built against NumPy 1.x.
+      - biotite==0.41.2
       # ESM-IF's GVP encoder imports PyG MessagePassing and torch_scatter.
       # Match the compiled extension exactly to PyTorch 2.5 / CUDA 12.1.
       - torch-geometric==2.6.1
-      - https://data.pyg.org/whl/torch-2.5.1+cu121/torch_scatter-2.1.2+pt25cu121-cp311-cp311-linux_x86_64.whl
+      # PyG publishes the PyTorch 2.5.x wheel set under the 2.5.0 index;
+      # there is no 2.5.1 directory (the otherwise identical URL returns 403).
+      - https://data.pyg.org/whl/torch-2.5.0+cu121/torch_scatter-2.1.2+pt25cu121-cp311-cp311-linux_x86_64.whl
       - fair-esm==2.0.0

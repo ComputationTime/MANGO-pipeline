@@ -1,0 +1,32 @@
+{
+  "checkpoint_epoch": 0,
+  "checkpoint_val_loss": 3.07417631149292,
+  "d_ag": 128,
+  "embedder": "proteinmpnn",
+  "experiment_hash": "c66a93c7",
+  "run_id": "proteinmpnn__c66a93c7",
+  "splits": {
+    "test": {
+      "n_examples": 1,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 121,
+      "nll": 3.1134986877441406,
+      "perplexity": 22.499626020117795
+    },
+    "train": {
+      "n_examples": 3,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 360,
+      "nll": 3.0392931448088754,
+      "perplexity": 20.890471476752392
+    },
+    "val": {
+      "n_examples": 1,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 122,
+      "nll": 3.07417631149292,
+      "perplexity": 21.63205649490512
+    }
+  },
+  "task": "antigen+light->heavy"
+}

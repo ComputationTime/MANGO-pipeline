@@ -1,15 +1,13 @@
 name: mango-analysis-iglm
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
 dependencies:
   - python=3.11
-  - pytorch=2.5.1
-  - pytorch-cuda=12.1
-  - cuda-version=12.1
   - pandas>=2.0
   - pip
   - pip:
+      # IgLM ships a legacy PyTorch .bin checkpoint.  Current Transformers
+      # requires torch>=2.6 to load it safely; 2.6+ is wheel-only upstream.
+      - torch==2.6.0
       - iglm==0.1.0
       - transformers==4.57.2

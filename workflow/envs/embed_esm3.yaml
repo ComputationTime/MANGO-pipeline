@@ -11,10 +11,16 @@ dependencies:
   - torchvision=0.18.0
   - torchtext=0.18.0
   - pytorch-cuda=12.1
-  - cuda-version=12.1
   - numpy
   - pip
   - pip:
       # Biohub's ESM3 package. MUST stay isolated from fair-esm because both
-      # own the top-level `esm` import. Pin the audited upstream revision.
-      - esm @ git+https://github.com/evolutionaryscale/esm.git@c6b8c342aa99c823cd63ff11e0047ccd2f962117
+      # own the top-level `esm` import. ESM 3.1.5 added getter-only special-token
+      # properties that Transformers tries to set during tokenizer startup.
+      # The preceding official 3.1.3 revision retains the compatible tokenizer.
+      - esm @ git+https://github.com/evolutionaryscale/esm.git@1b3e08025b8fcae39e9c9fe70e1dcde97707ffcd
+      - transformers==4.46.3
+      # The GPU image enables HF_HUB_ENABLE_HF_TRANSFER globally. Keep its
+      # accelerated downloader inside this model-specific environment so model
+      # acquisition does not depend on packages installed elsewhere.
+      - hf-transfer>=0.1.8,<0.2

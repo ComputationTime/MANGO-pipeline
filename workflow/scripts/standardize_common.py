@@ -8,7 +8,7 @@ Required columns
 id                  unique row id; also the stem of the embedding filenames
 pdb_path            path to the structure file for this row
 antigen_chains      comma-separated author chain ids of the ANTIGEN chains
-expected_heavy_seq  full annotated heavy sequence   (may be empty)
+expected_heavy_seq  model's heavy-chain target (VH for SAbDab2; may be empty)
 expected_light_seq  full annotated light sequence   (may be empty)
 expected_ag_seq     full annotated antigen sequence, comma-separated per chain
                     in the same order as antigen_chains (may be empty)

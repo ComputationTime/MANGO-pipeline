@@ -1,0 +1,15 @@
+embedder,run_id,target_id,design_index,sequence,germline_species,v_gene,v_identity,j_gene,j_identity,germline_reference_sequence,ld_germline,ld_germline_normalized,germline_status
+one_hot,one_hot__27bc5067,pdb_00009d3j_E_F,1,VTTGGQVPTRRVVRGLLVQYFPRTLLKTRL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+one_hot,one_hot__27bc5067,pdb_00009d3j_E_F,0,ATGTRADAKPGLTVGKDDFPPPSWRSSTTS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+biopython,biopython__6c1b9439,pdb_00009d3j_E_F,1,VGGGGQVPGGWVVVGLLVQYFPLVLLKGAL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+biopython,biopython__6c1b9439,pdb_00009d3j_E_F,0,AVGSVAESKEGLSVGKEDFPPVSWPSSVKS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+pyrosetta_pre,pyrosetta_pre__16206b0a,pdb_00009d3j_E_F,1,VKGGGAVLGGRVVRGLSVQYFPRVFEKARL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+pyrosetta_pre,pyrosetta_pre__16206b0a,pdb_00009d3j_E_F,0,AVGSEAEAKEGLSVGKEDFKLVSWESSVKS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+esm2,esm2__83a2d8f5,pdb_00009d3j_E_F,1,LLLSLQVPSSRVVRLLSVQYFPRVLLKARL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+esm2,esm2__83a2d8f5,pdb_00009d3j_E_F,0,AVLSRADSSENLSVQYQNFPPPSQRSSVSS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+esm3,esm3__2f193b39,pdb_00009d3j_E_F,1,VVGGGQVLGIRVVRGLSVQYFGRVFSKAIL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+esm3,esm3__2f193b39,pdb_00009d3j_E_F,0,AVGSVADSKEGLSVGKVDFKLVSWRSSVSS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+esmif,esmif__cd252270,pdb_00009d3j_E_F,1,VQGGGQVPGGRVVRGLDVQYFPRVFLKAIL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+esmif,esmif__cd252270,pdb_00009d3j_E_F,0,AVGSRADAKPGLSVGKQDFPPPSQPSSVKS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+proteinmpnn,proteinmpnn__c66a93c7,pdb_00009d3j_E_F,1,VVLSGQVLGGRVVRGLLVQYFVRVLLKARL,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
+proteinmpnn,proteinmpnn__c66a93c7,pdb_00009d3j_E_F,0,AVGSVAVSKEGLSVGKQVSVLVSWRSSVAS,,,,,,,,,error: ValueError: ANARCI found no heavy-chain domain
