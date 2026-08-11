@@ -163,9 +163,9 @@ model:
   # Vocab/hidden size come from mango.utils.mango_utils.MANGO_configs.
   n_cross_attn_heads: 1
   n_cross_attn_layers: 1
-  epochs: 5
+  epochs: 10
   lr: 1.0e-4
-  patience: 3                       # early-stop patience on val loss
+  patience: 2                       # early-stop patience on val loss
   grad_accum: 1
   # Refresh the on-disk training-curve PNG this often during each epoch. This
   # is reporting cadence only; validation still runs once at each epoch end.
