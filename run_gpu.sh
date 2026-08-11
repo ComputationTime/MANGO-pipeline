@@ -27,6 +27,9 @@ command -v nvidia-smi >/dev/null 2>&1 || {
 nvidia-smi >/dev/null
 
 CONDA_BIN="${CONDA_EXE:-$(command -v conda || true)}"
+if [[ -z "$CONDA_BIN" && -x "/workspace/miniforge3/bin/conda" ]]; then
+  CONDA_BIN="/workspace/miniforge3/bin/conda"
+fi
 if [[ -z "$CONDA_BIN" ]]; then
   echo "conda is required for isolated embedder environments." >&2
   exit 1
