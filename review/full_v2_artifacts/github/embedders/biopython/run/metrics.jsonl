@@ -1,0 +1,6 @@
+{"epoch": 0, "iteration": 2636, "train_loss": 1.223724258393021, "val_loss": 1.224020546132868, "train_order_seed": 0, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__9cced44a", "improved": true}
+{"epoch": 1, "iteration": 5272, "train_loss": 0.7394804075997667, "val_loss": 1.0472067488413868, "train_order_seed": 1, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__9cced44a", "improved": true}
+{"epoch": 2, "iteration": 7908, "train_loss": 0.6073278002161815, "val_loss": 0.9783374421072729, "train_order_seed": 2, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__9cced44a", "improved": true}
+{"epoch": 3, "iteration": 10544, "train_loss": 0.5370522651825614, "val_loss": 0.9385937879031355, "train_order_seed": 3, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__9cced44a", "improved": true}
+{"epoch": 4, "iteration": 13180, "train_loss": 0.4813482599362607, "val_loss": 0.9494331325545455, "train_order_seed": 4, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__9cced44a", "improved": false}
+{"epoch": 5, "iteration": 15816, "train_loss": 0.44079293332724057, "val_loss": 0.9628062367890821, "train_order_seed": 5, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__9cced44a", "improved": false}

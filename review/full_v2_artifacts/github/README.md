@@ -11,6 +11,7 @@ sets remain in canonical local storage and are intentionally excluded here.
 | Model | Run ID | Epochs run | Best epoch | Final train NLL | Best validation NLL | Test NLL | Status |
 |---|---|---:|---:|---:|---:|---:|---|
 | one_hot | `one_hot__a288de4f` | 7 | 4 | 0.3922 | 0.9096 | 1.0063 | Complete |
+| biopython | `biopython__9cced44a` | 6 | 3 | 0.4408 | 0.9386 | 0.9958 | Complete |
 
 One-hot validation NLL was 1.2440, 1.0576, 0.9939, 0.9107, 0.9096,
 0.9303, and 0.9214. Patience 2 stopped after epoch 6 and retained epoch 4 as
@@ -26,3 +27,11 @@ epoch-end validation NLL. Exact epoch summaries and shuffle seeds are in
 The run generated 40,000 successful designs across eight held-out targets. A
 balanced 800-design cohort and five 800-row `ok` analysis tables are included
 under `embedders/one_hot/analysis/`.
+
+Biopython validation NLL was 1.2240, 1.0472, 0.9783, 0.9386, 0.9494, and
+0.9628. Patience 2 stopped after epoch 5 and retained epoch 3. Each executed
+epoch contains all 2,636 training records exactly once in a distinct order.
+Its best checkpoint evaluates to train/validation/test NLL
+0.4417/0.9430/0.9958. Biopython also generated 40,000 successful designs and
+completed all five 800-row analysis tables; its review files mirror the
+one-hot layout under `embedders/biopython/`.
