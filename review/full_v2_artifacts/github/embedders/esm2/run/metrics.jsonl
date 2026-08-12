@@ -1,0 +1,6 @@
+{"epoch": 0, "iteration": 2636, "train_loss": 1.205437870397641, "val_loss": 1.2291045514020054, "train_order_seed": 0, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__e37a6a17", "improved": true}
+{"epoch": 1, "iteration": 5272, "train_loss": 0.7233588973234079, "val_loss": 1.0304222653309505, "train_order_seed": 1, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__e37a6a17", "improved": true}
+{"epoch": 2, "iteration": 7908, "train_loss": 0.5899429122967877, "val_loss": 0.9429915565432925, "train_order_seed": 2, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__e37a6a17", "improved": true}
+{"epoch": 3, "iteration": 10544, "train_loss": 0.5189254120778722, "val_loss": 0.8992158671220144, "train_order_seed": 3, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__e37a6a17", "improved": true}
+{"epoch": 4, "iteration": 13180, "train_loss": 0.46474943133208857, "val_loss": 0.9321318210074396, "train_order_seed": 4, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__e37a6a17", "improved": false}
+{"epoch": 5, "iteration": 15816, "train_loss": 0.42029425527464825, "val_loss": 0.9140573462302034, "train_order_seed": 5, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__e37a6a17", "improved": false}
