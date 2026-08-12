@@ -1,0 +1,15 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "d_ag": 1,
+  "d_model": 480,
+  "embedder": "pyrosetta_pre",
+  "experiment_hash": "f5601ee6",
+  "n_cross_attn_heads": 1,
+  "n_cross_attn_layers": 1,
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "run_id": "pyrosetta_pre__f5601ee6",
+  "task": "antigen+light->heavy",
+  "vocab_size": 26
+}

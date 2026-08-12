@@ -1,0 +1,32 @@
+{
+  "checkpoint_epoch": 3,
+  "checkpoint_val_loss": 0.9016530784693632,
+  "d_ag": 1,
+  "embedder": "pyrosetta_pre",
+  "experiment_hash": "f5601ee6",
+  "run_id": "pyrosetta_pre__f5601ee6",
+  "splits": {
+    "test": {
+      "n_examples": 426,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 52077,
+      "nll": 0.9816063528710833,
+      "perplexity": 2.668739738345816
+    },
+    "train": {
+      "n_examples": 2636,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 320058,
+      "nll": 0.40310030625599186,
+      "perplexity": 1.4964569881333818
+    },
+    "val": {
+      "n_examples": 132,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 16050,
+      "nll": 0.9072339618651666,
+      "perplexity": 2.4774602974965547
+    }
+  },
+  "task": "antigen+light->heavy"
+}

@@ -1,0 +1,212 @@
+{
+  "embedder": "pyrosetta_pre",
+  "experiment_hash": "f5601ee6",
+  "global_state": {
+    "active_embedders": [
+      "pyrosetta_pre"
+    ],
+    "analysis": {
+      "ab_likeness": {
+        "ablang2": {
+          "mode": "confidence"
+        },
+        "antiberty": {
+          "batch_size": 16
+        },
+        "iglm": {
+          "chain_token": "[HEAVY]",
+          "species_token": "[HUMAN]"
+        }
+      },
+      "cohort": {
+        "n_per_target": 100,
+        "seed": 13
+      },
+      "developability": {
+        "charge_ph": 7.4
+      },
+      "dpi": 200,
+      "embedders": null,
+      "format": "png",
+      "germline": {
+        "allowed_species": null,
+        "scheme": "imgt"
+      },
+      "plots": {
+        "fig1_nll": {
+          "enabled": true
+        },
+        "fig3_ablikeness": {
+          "enabled": true
+        },
+        "fig4_ld_germline": {
+          "enabled": true
+        },
+        "fig5_developability": {
+          "enabled": true
+        }
+      }
+    },
+    "dataset": {
+      "artifact_root": "artifacts",
+      "name": "sabdab2",
+      "split_column": "ab_ag_split",
+      "split_file": "abag_split.csv",
+      "version": "0.1.0",
+      "zenodo_url": "https://zenodo.org/api/records/20083995/files/splits.tar.gz/content"
+    },
+    "embedders": {
+      "afm": {
+        "class": "learned",
+        "include_light_chain": true,
+        "label": "AF-M",
+        "method": "afm",
+        "representation": "single"
+      },
+      "biopython": {
+        "class": "biophysical",
+        "label": "BioPython",
+        "layout": "chain_descriptor_repeated_per_residue",
+        "method": "biopython"
+      },
+      "esm2": {
+        "class": "learned",
+        "label": "ESM2",
+        "method": "esm2",
+        "size": "t33_650M"
+      },
+      "esm3": {
+        "class": "learned",
+        "label": "ESM3 (sequence)",
+        "method": "esm3",
+        "model_name": "esm3-sm-open-v1",
+        "representation": "sequence",
+        "requires_hf_token": true
+      },
+      "esmif": {
+        "class": "learned",
+        "label": "ESM-IF",
+        "method": "esmif",
+        "model_name": "esm_if1_gvp4_t16_142M_UR50"
+      },
+      "one_hot": {
+        "class": "naive",
+        "label": "One-hot",
+        "method": "one_hot"
+      },
+      "proteinmpnn": {
+        "class": "learned",
+        "label": "ProteinMPNN",
+        "method": "proteinmpnn",
+        "model": "vanilla_models",
+        "noise": 2
+      },
+      "pyrosetta_pre": {
+        "add_chain_breaks": true,
+        "class": "biophysical",
+        "label": "PyRosetta PRE",
+        "method": "pyrosetta_pre",
+        "normalize": "zscore",
+        "score_function": "ref2015"
+      }
+    },
+    "embedding": {
+      "antibody": {
+        "context": "light_only",
+        "method": "ablang2"
+      },
+      "seq_source": "resolved",
+      "splits": [
+        "train",
+        "val",
+        "test"
+      ]
+    },
+    "execution": {
+      "batch_embeddings": true,
+      "min_gpu_memory_gb": 20
+    },
+    "experiment": {
+      "name": "mango_gpu_study",
+      "seed": 13
+    },
+    "generation": {
+      "controls": {
+        "iglm": {
+          "enabled": false,
+          "prompt_prefix_len": 5
+        }
+      },
+      "do_sample": true,
+      "max_new_tokens": 180,
+      "max_targets": 8,
+      "n_per_target": 5000,
+      "source": "test",
+      "temperature": 1.0,
+      "top_p": 1.0
+    },
+    "model": {
+      "epochs": 10,
+      "grad_accum": 1,
+      "loss_plot_interval": 250,
+      "lr": 0.0001,
+      "n_cross_attn_heads": 1,
+      "n_cross_attn_layers": 1,
+      "patience": 2,
+      "predict_splits": [
+        "test"
+      ],
+      "retrain": true,
+      "seed": 0,
+      "shuffle_train": true,
+      "train_splits": [
+        "train"
+      ],
+      "val_splits": [
+        "val"
+      ]
+    },
+    "processing": {
+      "antigen_types": [
+        "PROTEIN"
+      ],
+      "max_antigen_len": 1000,
+      "require_paired": true,
+      "require_structure_file": true,
+      "subset": {
+        "enabled": false,
+        "rows_per_cluster": 1,
+        "test_clusters": 1,
+        "train_clusters": 4
+      },
+      "val": {
+        "cluster_column": "ab_ag_cluster",
+        "fraction": 0.1,
+        "seed": 42,
+        "strategy": "cluster"
+      }
+    },
+    "structure_prediction": {
+      "enabled": false,
+      "methods": [
+        "af3",
+        "boltz2",
+        "chai"
+      ],
+      "n_designs": 30,
+      "n_targets": 1,
+      "scores": [
+        "ptm",
+        "iptm",
+        "pae"
+      ],
+      "targets": null
+    },
+    "weights": {
+      "ablang2_url": "https://zenodo.org/records/10185169/files/ablang2-weights.tar.gz",
+      "proteinmpnn_repo_raw": "https://raw.githubusercontent.com/dauparas/ProteinMPNN/main",
+      "root": "artifacts/weights"
+    }
+  },
+  "run_id": "pyrosetta_pre__f5601ee6"
+}
