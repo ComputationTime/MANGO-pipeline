@@ -16,6 +16,7 @@ sets remain in canonical local storage and are intentionally excluded here.
 | esm2 | `esm2__e37a6a17` | 6 | 3 | 0.4203 | 0.8992 | 0.9677 | Complete |
 | esm3 | `esm3__cf6a2de7` | 6 | 3 | 0.4250 | 0.9016 | 0.9689 | Complete |
 | esmif | `esmif__fb878fa4` | 7 | 4 | 0.3837 | 0.9361 | 0.9870 | Complete |
+| proteinmpnn | `proteinmpnn__dc6e942e` | 8 | 5 | 0.3593 | 0.9026 | 0.9408 | Complete |
 
 One-hot validation NLL was 1.2440, 1.0576, 0.9939, 0.9107, 0.9096,
 0.9303, and 0.9214. Patience 2 stopped after epoch 6 and retained epoch 4 as
@@ -71,3 +72,22 @@ distinct order. Its best checkpoint evaluates to train/validation/test NLL
 0.3881/0.9413/0.9870. The inverse-folding runtime embedded all 3,194 cohort
 structures. ESM-IF generated 40,000 successful designs and completed all five
 800-row analysis tables under `embedders/esmif/`.
+
+ProteinMPNN validation NLL was 1.2330, 1.0592, 0.9409, 0.9406, 0.9121,
+0.9026, 0.9398, and 0.9588. Patience 2 stopped after epoch 7 and retained
+epoch 5. Every executed epoch contains all 2,636 training records exactly once
+in a distinct order. Its best checkpoint evaluates to train/validation/test
+NLL 0.3519/0.9072/0.9408. ProteinMPNN embedded all 3,194 cohort structures,
+generated 40,000 successful designs, and completed all five 800-row analysis
+tables under `embedders/proteinmpnn/`.
+
+## Cross-model review
+
+The strict completion manifest is `summary/results_complete.json`; it records
+all seven models and all seven training curves as complete. Cross-model plots
+are under `figures/`, with exact plotted values under `figure_data/`:
+
+- `fig1_nll.png`: train and test NLL by model.
+- `fig3_ablikeness.png`: IgLM, AntiBERTy, and AbLang2 scores.
+- `fig4_ld_germline.png`: germline-distance summaries.
+- `fig5_developability.png`: biophysical/developability summaries.

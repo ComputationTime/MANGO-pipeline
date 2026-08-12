@@ -1,19 +1,19 @@
 {
-  "figure_data": [],
-  "figures": [],
-  "note": "Per-embedder NLL/perplexity and prediction counts remain reportable when comparison figures cannot be rebuilt because another method failed.",
-  "possibly_stale_figure_data": [
+  "figure_data": [
     "artifacts/analysis/figures/fig1_nll_data.csv",
     "artifacts/analysis/figures/fig3_ablikeness_data.csv",
     "artifacts/analysis/figures/fig4_ld_germline_data.csv",
     "artifacts/analysis/figures/fig5_developability_data.csv"
   ],
-  "possibly_stale_figures": [
+  "figures": [
     "artifacts/analysis/figures/fig1_nll.png",
     "artifacts/analysis/figures/fig3_ablikeness.png",
     "artifacts/analysis/figures/fig4_ld_germline.png",
     "artifacts/analysis/figures/fig5_developability.png"
   ],
+  "note": "Per-embedder NLL/perplexity and prediction counts remain reportable when comparison figures cannot be rebuilt because another method failed.",
+  "possibly_stale_figure_data": [],
+  "possibly_stale_figures": [],
   "preflight": {
     "compute_capability": "8.6",
     "cuda_visible_devices": null,
@@ -21,7 +21,7 @@
     "gpu_memory_gb": 44.42,
     "gpu_name": "NVIDIA RTX A6000",
     "hostname": "47480f7fc249",
-    "kernel_checksum": -0.04160865396261215,
+    "kernel_checksum": -0.027014728635549545,
     "status": "ok",
     "torch_cuda_version": "12.1",
     "torch_version": "2.5.1"
@@ -429,10 +429,16 @@
       "weights_ready": true
     },
     "proteinmpnn": {
-      "analysis_metrics": {},
-      "checkpoint_ready": false,
+      "analysis_metrics": {
+        "ablang2": "artifacts/analysis/proteinmpnn__dc6e942e/metrics/ablang2.csv",
+        "antiberty": "artifacts/analysis/proteinmpnn__dc6e942e/metrics/antiberty.csv",
+        "biophysical": "artifacts/analysis/proteinmpnn__dc6e942e/metrics/biophysical.csv",
+        "germline": "artifacts/analysis/proteinmpnn__dc6e942e/metrics/germline.csv",
+        "iglm": "artifacts/analysis/proteinmpnn__dc6e942e/metrics/iglm.csv"
+      },
+      "checkpoint_ready": true,
       "embedding_ready": true,
-      "evaluation": null,
+      "evaluation": "artifacts/runs/proteinmpnn__dc6e942e/eval.json",
       "evaluation_error": null,
       "expected_paths": {
         "analysis_metrics": {
@@ -457,27 +463,49 @@
         "training_plot": "artifacts/runs/proteinmpnn__dc6e942e/training_curve.png",
         "weights": "artifacts/weights/proteinmpnn/vanilla_models/v_48_002.pt"
       },
-      "failure_stage": "training",
+      "failure_stage": null,
       "logs": {
         "evaluate": "artifacts/logs/evaluate_proteinmpnn__dc6e942e.log",
         "predict": "artifacts/logs/predict_proteinmpnn__dc6e942e.log",
         "train": "artifacts/logs/train_proteinmpnn__dc6e942e.log"
       },
-      "missing_analysis_metrics": [
-        "ablang2",
-        "antiberty",
-        "biophysical",
-        "germline",
-        "iglm"
-      ],
-      "prediction_counts": null,
+      "missing_analysis_metrics": [],
+      "prediction_counts": {
+        "ok": 426,
+        "rows": 426,
+        "statuses": {
+          "ok": 426
+        }
+      },
       "prediction_error": null,
-      "predictions": null,
+      "predictions": "artifacts/runs/proteinmpnn__dc6e942e/predictions_test.csv",
       "run_id": "proteinmpnn__dc6e942e",
-      "splits": {},
-      "status": "failed_or_incomplete",
-      "training_curve": null,
-      "training_plot": null,
+      "splits": {
+        "test": {
+          "n_examples": 426,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 52077,
+          "nll": 0.9408102767833113,
+          "perplexity": 2.5620565524412133
+        },
+        "train": {
+          "n_examples": 2636,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 320058,
+          "nll": 0.35191323757557097,
+          "perplexity": 1.4217851608394518
+        },
+        "val": {
+          "n_examples": 132,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 16050,
+          "nll": 0.9072350751722342,
+          "perplexity": 2.477463055672149
+        }
+      },
+      "status": "complete",
+      "training_curve": "artifacts/runs/proteinmpnn__dc6e942e/training_curve.csv",
+      "training_plot": "artifacts/runs/proteinmpnn__dc6e942e/training_curve.png",
       "weights_ready": true
     },
     "pyrosetta_pre": {
@@ -561,23 +589,22 @@
       "weights_ready": true
     }
   },
-  "status": "partial",
+  "status": "complete",
   "summary": {
     "analysis_incomplete_embedders": [],
-    "complete": 6,
-    "core_successful": 6,
+    "complete": 7,
+    "core_successful": 7,
     "expected": 7,
-    "failed_or_incomplete": 1,
-    "failed_or_incomplete_embedders": [
-      "proteinmpnn"
-    ],
+    "failed_or_incomplete": 0,
+    "failed_or_incomplete_embedders": [],
     "fully_complete_embedders": [
       "one_hot",
       "biopython",
       "pyrosetta_pre",
       "esm2",
       "esm3",
-      "esmif"
+      "esmif",
+      "proteinmpnn"
     ],
     "successful_embedders": [
       "one_hot",
@@ -585,7 +612,8 @@
       "pyrosetta_pre",
       "esm2",
       "esm3",
-      "esmif"
+      "esmif",
+      "proteinmpnn"
     ]
   },
   "task": "antigen+light->heavy"

@@ -5,7 +5,7 @@
   "gpu_memory_gb": 44.42,
   "gpu_name": "NVIDIA RTX A6000",
   "hostname": "47480f7fc249",
-  "kernel_checksum": -0.04160865396261215,
+  "kernel_checksum": -0.027014728635549545,
   "status": "ok",
   "torch_cuda_version": "12.1",
   "torch_version": "2.5.1"
