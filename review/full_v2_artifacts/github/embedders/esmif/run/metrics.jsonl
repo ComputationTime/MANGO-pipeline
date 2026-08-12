@@ -1,0 +1,7 @@
+{"epoch": 0, "iteration": 2636, "train_loss": 1.20221870479051, "val_loss": 1.224814619530331, "train_order_seed": 0, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": true}
+{"epoch": 1, "iteration": 5272, "train_loss": 0.7301070761069449, "val_loss": 1.018464740027081, "train_order_seed": 1, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": true}
+{"epoch": 2, "iteration": 7908, "train_loss": 0.5952218862394244, "val_loss": 0.985766666856679, "train_order_seed": 2, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": true}
+{"epoch": 3, "iteration": 10544, "train_loss": 0.5224889085546125, "val_loss": 0.9611133711807656, "train_order_seed": 3, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": true}
+{"epoch": 4, "iteration": 13180, "train_loss": 0.4673042254793961, "val_loss": 0.9361190978776325, "train_order_seed": 4, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": true}
+{"epoch": 5, "iteration": 15816, "train_loss": 0.42391698154395063, "val_loss": 1.0043039046453708, "train_order_seed": 5, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": false}
+{"epoch": 6, "iteration": 18452, "train_loss": 0.3836662495726605, "val_loss": 1.037270906973969, "train_order_seed": 6, "train_shuffled": true, "embedder": "esmif", "run_id": "esmif__fb878fa4", "improved": false}

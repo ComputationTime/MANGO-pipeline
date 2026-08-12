@@ -15,6 +15,7 @@ sets remain in canonical local storage and are intentionally excluded here.
 | pyrosetta_pre | `pyrosetta_pre__f5601ee6` | 6 | 3 | 0.3824 | 0.9017 | 0.9816 | Complete |
 | esm2 | `esm2__e37a6a17` | 6 | 3 | 0.4203 | 0.8992 | 0.9677 | Complete |
 | esm3 | `esm3__cf6a2de7` | 6 | 3 | 0.4250 | 0.9016 | 0.9689 | Complete |
+| esmif | `esmif__fb878fa4` | 7 | 4 | 0.3837 | 0.9361 | 0.9870 | Complete |
 
 One-hot validation NLL was 1.2440, 1.0576, 0.9939, 0.9107, 0.9096,
 0.9303, and 0.9214. Patience 2 stopped after epoch 6 and retained epoch 4 as
@@ -62,3 +63,11 @@ Its best checkpoint evaluates to train/validation/test NLL
 0.4360/0.9058/0.9689. The authenticated `esm3-sm-open-v1` runtime embedded all
 3,194 cohort records. ESM3 generated 40,000 successful designs and completed
 all five 800-row analysis tables under `embedders/esm3/`.
+
+ESM-IF validation NLL was 1.2248, 1.0185, 0.9858, 0.9611, 0.9361,
+1.0043, and 1.0373. Patience 2 stopped after epoch 6 and retained epoch 4.
+Every executed epoch contains all 2,636 training records exactly once in a
+distinct order. Its best checkpoint evaluates to train/validation/test NLL
+0.3881/0.9413/0.9870. The inverse-folding runtime embedded all 3,194 cohort
+structures. ESM-IF generated 40,000 successful designs and completed all five
+800-row analysis tables under `embedders/esmif/`.

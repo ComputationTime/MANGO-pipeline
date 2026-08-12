@@ -1,0 +1,15 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "d_ag": 512,
+  "d_model": 480,
+  "embedder": "esmif",
+  "experiment_hash": "fb878fa4",
+  "n_cross_attn_heads": 1,
+  "n_cross_attn_layers": 1,
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "run_id": "esmif__fb878fa4",
+  "task": "antigen+light->heavy",
+  "vocab_size": 26
+}
