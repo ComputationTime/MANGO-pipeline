@@ -25,6 +25,42 @@ import device_common as dc
 # ProteinMPNN's StructureDatasetPDB drops sequences longer than max_length;
 # antigens are already capped upstream, but keep this generous.
 MPNN_MAX_LENGTH = 20000
+MPNN_CHAIN_ALIASES = tuple(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+)
+
+
+def alias_proteinmpnn_chains(pdb_dict: dict, chains: list[str]) -> dict:
+    """Return a ProteinMPNN dict whose chain identifiers are one character.
+
+    SAbDab2 author chain identifiers may contain multiple characters (for
+    example ``D1``).  ProteinMPNN's contributed featurizer discovers chains by
+    taking the final character of each ``seq_chain_*`` key, so feeding author
+    identifiers directly can make it look up a nonexistent key.  Alias only
+    this private model input; output metadata continues to use author IDs.
+    """
+    present = [chain for chain in chains if f"seq_chain_{chain}" in pdb_dict]
+    if len(present) > len(MPNN_CHAIN_ALIASES):
+        raise ValueError(
+            f"ProteinMPNN supports at most {len(MPNN_CHAIN_ALIASES)} chains; "
+            f"received {len(present)}"
+        )
+
+    result = {
+        key: value
+        for key, value in pdb_dict.items()
+        if not key.startswith(("seq_chain_", "coords_chain_"))
+    }
+    for chain, alias in zip(present, MPNN_CHAIN_ALIASES):
+        result[f"seq_chain_{alias}"] = pdb_dict[f"seq_chain_{chain}"]
+        source = pdb_dict[f"coords_chain_{chain}"]
+        result[f"coords_chain_{alias}"] = {
+            key.replace(f"_chain_{chain}", f"_chain_{alias}"): value
+            for key, value in source.items()
+        }
+    result["num_of_chains"] = len(present)
+    result["seq"] = "".join(result[f"seq_chain_{a}"] for a in MPNN_CHAIN_ALIASES[:len(present)])
+    return result
 
 
 def load_runtime(weights: str, model: str, noise: int):
@@ -63,7 +99,9 @@ def proteinmpnn(
     else:
         mp, encoder = runtime
 
-    pdb_dict = mmcif.backbone_dict(cif_path, chains, name=record_id)
+    pdb_dict = alias_proteinmpnn_chains(
+        mmcif.backbone_dict(cif_path, chains, name=record_id), chains
+    )
     dataset = mp.StructureDatasetPDB(
         [pdb_dict], verbose=False, truncate=None, max_length=MPNN_MAX_LENGTH
     )
