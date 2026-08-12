@@ -1,0 +1,15 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "d_ag": 1536,
+  "d_model": 480,
+  "embedder": "esm3",
+  "experiment_hash": "cf6a2de7",
+  "n_cross_attn_heads": 1,
+  "n_cross_attn_layers": 1,
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "run_id": "esm3__cf6a2de7",
+  "task": "antigen+light->heavy",
+  "vocab_size": 26
+}

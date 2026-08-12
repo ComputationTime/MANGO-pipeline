@@ -189,10 +189,16 @@
       "weights_ready": true
     },
     "esm3": {
-      "analysis_metrics": {},
-      "checkpoint_ready": false,
+      "analysis_metrics": {
+        "ablang2": "artifacts/analysis/esm3__cf6a2de7/metrics/ablang2.csv",
+        "antiberty": "artifacts/analysis/esm3__cf6a2de7/metrics/antiberty.csv",
+        "biophysical": "artifacts/analysis/esm3__cf6a2de7/metrics/biophysical.csv",
+        "germline": "artifacts/analysis/esm3__cf6a2de7/metrics/germline.csv",
+        "iglm": "artifacts/analysis/esm3__cf6a2de7/metrics/iglm.csv"
+      },
+      "checkpoint_ready": true,
       "embedding_ready": true,
-      "evaluation": null,
+      "evaluation": "artifacts/runs/esm3__cf6a2de7/eval.json",
       "evaluation_error": null,
       "expected_paths": {
         "analysis_metrics": {
@@ -217,27 +223,49 @@
         "training_plot": "artifacts/runs/esm3__cf6a2de7/training_curve.png",
         "weights": "artifacts/weights/pretrained/esm3.json"
       },
-      "failure_stage": "training",
+      "failure_stage": null,
       "logs": {
         "evaluate": "artifacts/logs/evaluate_esm3__cf6a2de7.log",
         "predict": "artifacts/logs/predict_esm3__cf6a2de7.log",
         "train": "artifacts/logs/train_esm3__cf6a2de7.log"
       },
-      "missing_analysis_metrics": [
-        "ablang2",
-        "antiberty",
-        "biophysical",
-        "germline",
-        "iglm"
-      ],
-      "prediction_counts": null,
+      "missing_analysis_metrics": [],
+      "prediction_counts": {
+        "ok": 426,
+        "rows": 426,
+        "statuses": {
+          "ok": 426
+        }
+      },
       "prediction_error": null,
-      "predictions": null,
+      "predictions": "artifacts/runs/esm3__cf6a2de7/predictions_test.csv",
       "run_id": "esm3__cf6a2de7",
-      "splits": {},
-      "status": "failed_or_incomplete",
-      "training_curve": null,
-      "training_plot": null,
+      "splits": {
+        "test": {
+          "n_examples": 426,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 52077,
+          "nll": 0.9688752130980746,
+          "perplexity": 2.6349790020446786
+        },
+        "train": {
+          "n_examples": 2636,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 320058,
+          "nll": 0.4359507995724707,
+          "perplexity": 1.5464327077272704
+        },
+        "val": {
+          "n_examples": 132,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 16050,
+          "nll": 0.9058071049425832,
+          "perplexity": 2.473927836877907
+        }
+      },
+      "status": "complete",
+      "training_curve": "artifacts/runs/esm3__cf6a2de7/training_curve.csv",
+      "training_plot": "artifacts/runs/esm3__cf6a2de7/training_curve.png",
       "weights_ready": true
     },
     "esmif": {
@@ -508,12 +536,11 @@
   "status": "partial",
   "summary": {
     "analysis_incomplete_embedders": [],
-    "complete": 4,
-    "core_successful": 4,
+    "complete": 5,
+    "core_successful": 5,
     "expected": 7,
-    "failed_or_incomplete": 3,
+    "failed_or_incomplete": 2,
     "failed_or_incomplete_embedders": [
-      "esm3",
       "esmif",
       "proteinmpnn"
     ],
@@ -521,13 +548,15 @@
       "one_hot",
       "biopython",
       "pyrosetta_pre",
-      "esm2"
+      "esm2",
+      "esm3"
     ],
     "successful_embedders": [
       "one_hot",
       "biopython",
       "pyrosetta_pre",
-      "esm2"
+      "esm2",
+      "esm3"
     ]
   },
   "task": "antigen+light->heavy"

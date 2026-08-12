@@ -11,6 +11,8 @@ pyrosetta_pre,complete,,pyrosetta_pre__f5601ee6,val,132,16050,0.9072339618651666
 esm2,complete,,esm2__e37a6a17,test,426,52077,0.9677158952163364,2.631925993815062,426,426,artifacts/runs/esm2__e37a6a17/training_curve.csv,artifacts/runs/esm2__e37a6a17/training_curve.png,artifacts/runs/esm2__e37a6a17/eval.json,artifacts/runs/esm2__e37a6a17/predictions_test.csv
 esm2,complete,,esm2__e37a6a17,train,2636,320058,0.4304960598649848,1.5380202844797606,426,426,artifacts/runs/esm2__e37a6a17/training_curve.csv,artifacts/runs/esm2__e37a6a17/training_curve.png,artifacts/runs/esm2__e37a6a17/eval.json,artifacts/runs/esm2__e37a6a17/predictions_test.csv
 esm2,complete,,esm2__e37a6a17,val,132,16050,0.9041858752382879,2.4699202810445406,426,426,artifacts/runs/esm2__e37a6a17/training_curve.csv,artifacts/runs/esm2__e37a6a17/training_curve.png,artifacts/runs/esm2__e37a6a17/eval.json,artifacts/runs/esm2__e37a6a17/predictions_test.csv
-esm3,failed_or_incomplete,training,esm3__cf6a2de7,,,,,,,,,,,
+esm3,complete,,esm3__cf6a2de7,test,426,52077,0.9688752130980746,2.6349790020446786,426,426,artifacts/runs/esm3__cf6a2de7/training_curve.csv,artifacts/runs/esm3__cf6a2de7/training_curve.png,artifacts/runs/esm3__cf6a2de7/eval.json,artifacts/runs/esm3__cf6a2de7/predictions_test.csv
+esm3,complete,,esm3__cf6a2de7,train,2636,320058,0.4359507995724707,1.5464327077272704,426,426,artifacts/runs/esm3__cf6a2de7/training_curve.csv,artifacts/runs/esm3__cf6a2de7/training_curve.png,artifacts/runs/esm3__cf6a2de7/eval.json,artifacts/runs/esm3__cf6a2de7/predictions_test.csv
+esm3,complete,,esm3__cf6a2de7,val,132,16050,0.9058071049425832,2.473927836877907,426,426,artifacts/runs/esm3__cf6a2de7/training_curve.csv,artifacts/runs/esm3__cf6a2de7/training_curve.png,artifacts/runs/esm3__cf6a2de7/eval.json,artifacts/runs/esm3__cf6a2de7/predictions_test.csv
 esmif,failed_or_incomplete,training,esmif__fb878fa4,,,,,,,,,,,
 proteinmpnn,failed_or_incomplete,training,proteinmpnn__dc6e942e,,,,,,,,,,,
