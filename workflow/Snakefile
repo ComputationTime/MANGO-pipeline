@@ -21,9 +21,9 @@
 # The repository default activates only the one-hot antigen baseline. The
 # config/gpu.yaml overlay activates the five validated, non-gated methods and
 # batches their embeddings for one local NVIDIA GPU. Figures 1, 3, 4 and 5 are
-# available through the explicit `analysis` target. Boltz-2/Chai-1 Figure 2 is
-# available through the separate `structure_confidence` target. Therapeutic
-# targets, AF3, and TAP remain deferred.
+# available through the explicit `analysis` target. Boltz-2/Chai-1 Figure 2 now
+# runs on a bounded, cluster-diverse generated subset in the GPU launcher.
+# Therapeutic targets, AF3, and TAP remain deferred.
 #
 # All experiment options live in config/config.yaml -- the global state file.
 # Nothing below hardcodes a path, a model size, or a split name.

@@ -69,9 +69,9 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 | `*-all` | every implemented embedder above | both requirements |
 
 AF-M is not included in `all`: it is still an implementation stub and requires
-an MSA/database/container design. Figure 2, AF3, Boltz, and Chai are also not part of this training/inference
-completion target. Boltz-2/Chai-1 confidence can be run afterward through the
-opt-in `structure_confidence` target; AF3 remains cluster-deferred.
+an MSA/database/container design. AF3 remains cluster-deferred. Boltz-2 and
+Chai-1 run automatically after generation on a mode-specific bounded subset,
+and Figure 2 is part of strict GPU completion.
 
 ## 5. Optional gated setup
 

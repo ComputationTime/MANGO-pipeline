@@ -40,10 +40,13 @@ GPU: `one_hot`, `biopython`, `esm2`, `esmif`, and `proteinmpnn`.
 - PyRosetta PRE is opt-in with `smoke-pyrosetta` / `study-pyrosetta`; its real
   mmCIF chain mapping still needs validation before scientific use.
 - `*-all` enables both optional methods.
-- AF-M, AF3, Boltz, Chai, Figure 2, TAP, therapeutic benchmark antibodies, and
-  the eight therapeutic complex chains are deferred. Do not add them to the
-  completion target while debugging the current milestone.
-- Figures 1, 3, 4, and 5 are in scope. Figure 1 is train/test NLL. Figure 4 uses
+- AF-M, AF3, TAP, therapeutic benchmark antibodies, and the eight therapeutic
+  complex chains are deferred.
+- Boltz-2, Chai-1, and Figure 2 run by default on a bounded, cluster-diverse
+  subset. Smoke uses one target/design; study uses three designs from each of
+  ten held-out antigen clusters per model and predictor. Failures remain an
+  analysis-layer failure and must not hide usable core model outputs.
+- Figures 1 through 5 are in scope. Figure 1 is train/test NLL. Figure 4 uses
   ANARCI germline assignment and reports distance to the nearest heavy-chain
   germline. TAP remains skipped.
 

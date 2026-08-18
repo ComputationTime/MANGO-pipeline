@@ -298,6 +298,10 @@ def struct_raw_dir(tag: str, instance: str, method: str) -> str:
     return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/{method}_raw"
 
 
+def struct_run_marker(tag: str) -> str:
+    return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/.confidence_complete"
+
+
 def complex_metrics_csv(tag: str, instance: str) -> str:
     return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/complex_metrics.csv"
 
@@ -321,7 +325,15 @@ if _bad:
 
 
 def enabled_figures() -> list:
-    return [n for n, c in config["analysis"]["plots"].items() if c.get("enabled", True)]
+    figures = []
+    structure_enabled = bool(config["structure_prediction"].get("enabled", False))
+    for name, settings in config["analysis"]["plots"].items():
+        if not settings.get("enabled", True):
+            continue
+        if name == "fig2_structure_confidence" and not structure_enabled:
+            continue
+        figures.append(name)
+    return figures
 
 
 # --- Aim 2 target structures -------------------------------------------------
@@ -406,7 +418,13 @@ def sp_targets() -> list:
     if configured:
         return list(configured)
     n = int(config["structure_prediction"].get("n_targets", 1))
-    return generation_instances()[:n]
+    available = generation_instances()
+    if len(available) < n:
+        raise ValueError(
+            f"structure_prediction requests {n} held-out targets, but generation "
+            f"only supplied {len(available)}"
+        )
+    return available[:n]
 
 
 def sp_methods() -> list:
@@ -419,6 +437,21 @@ def sp_methods() -> list:
             "AF3 remains deferred to cluster-side ingestion"
         )
     return methods
+
+
+def structure_confidence_enabled() -> bool:
+    return bool(config["structure_prediction"].get("enabled", False))
+
+
+def structure_confidence_outputs(tag: str) -> list:
+    """All normalized structure-confidence tables expected for one run."""
+    if not structure_confidence_enabled():
+        return []
+    return [
+        struct_scores_csv(tag, instance, method)
+        for instance in sp_targets()
+        for method in sp_methods()
+    ]
 
 
 # --- Wildcard hygiene --------------------------------------------------------

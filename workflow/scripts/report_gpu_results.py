@@ -82,11 +82,13 @@ def report(specs, preflight_path, figures, figure_data, output_json, output_csv)
             if Path(path).is_file()
         }
         missing_metrics = sorted(set(expected_metrics) - set(metrics))
+        structure_path = spec.get("structure_confidence")
+        structure_ready = not structure_path or Path(structure_path).is_file()
         if core_failure_stage is not None:
             status = "failed_or_incomplete"
             failure_stage = core_failure_stage
             failed.append(tag)
-        elif missing_metrics:
+        elif missing_metrics or not structure_ready:
             status = "core_complete_analysis_incomplete"
             failure_stage = "analysis"
             successful.append(tag)
@@ -121,6 +123,8 @@ def report(specs, preflight_path, figures, figure_data, output_json, output_csv)
             "prediction_counts": predictions,
             "analysis_metrics": metrics,
             "missing_analysis_metrics": missing_metrics,
+            "structure_confidence": structure_path if structure_ready else None,
+            "structure_confidence_ready": structure_ready,
             "expected_paths": spec,
             "logs": spec.get("logs", {}),
         }

@@ -46,6 +46,20 @@ class StructureConfidenceTests(unittest.TestCase):
                  ("AG1", "ACDE"), ("AG2", "FGHI")],
             )
 
+    def test_design_selection_rejects_an_undersized_cohort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            designs = Path(tmp) / "designs.csv"
+            pd.DataFrame({
+                "embedder": ["one_hot"] * 2,
+                "run_id": ["run"] * 2,
+                "target_id": ["target"] * 2,
+                "design_index": [0, 1],
+                "sequence": ["EVQLV"] * 2,
+                "status": ["ok", "error"],
+            }).to_csv(designs, index=False)
+            with self.assertRaisesRegex(RuntimeError, "3 are required"):
+                sc.select_designs(designs, 3, 13)
+
     def test_noncanonical_generated_sequence_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "canonical"):
             sc.clean_sequence("EVQLX")

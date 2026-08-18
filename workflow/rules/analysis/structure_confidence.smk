@@ -1,4 +1,4 @@
-"""Opt-in Boltz-2 and Chai-1 confidence predictions for handbook Figure 2."""
+"""Bounded Boltz-2 and Chai-1 confidence predictions for handbook Figure 2."""
 
 _SP = config["structure_prediction"]
 
@@ -55,13 +55,22 @@ rule predict_chai_confidence:
         "../../scripts/analysis/run_chai_confidence.py"
 
 
+rule structure_confidence_run:
+    """Completion marker for every configured target/predictor in one run."""
+    input:
+        lambda w: structure_confidence_outputs(tag_for_run(w.run)),
+    output:
+        touch(f"{ANALYSIS_DIR}/{{run}}/structures/.confidence_complete"),
+
+
+rule structure_confidence_scores:
+    """Normalized Boltz/Chai tables for every active embedder, without plotting."""
+    input:
+        [struct_run_marker(tag) for tag in ANALYSIS_EMBEDDERS],
+
+
 rule structure_confidence:
     input:
-        scores=lambda w: [
-            struct_scores_csv(tag, instance, method)
-            for tag in ANALYSIS_EMBEDDERS
-            for instance in sp_targets()
-            for method in sp_methods()
-        ],
+        scores=[struct_run_marker(tag) for tag in ANALYSIS_EMBEDDERS],
         figure=figure_path("fig2_structure_confidence"),
         data=figure_data_path("fig2_structure_confidence"),

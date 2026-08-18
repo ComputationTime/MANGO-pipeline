@@ -1,6 +1,6 @@
 # Structure-prediction integration plan
 
-Structure prediction is an opt-in layer after training and inference. Boltz-2 and
+Structure prediction is a bounded default layer after training and inference. Boltz-2 and
 Chai-1 confidence execution and normalization are implemented; AF3 remains a
 cluster-side ingestion target. It should be a separate workflow layer with three
 stable boundaries:
@@ -51,9 +51,10 @@ weights and large local databases. Each still has a separate pinned Conda enviro
 
 ## Implemented local confidence contract
 
-`snakemake --configfile config/gpu.yaml config/structure.yaml structure_confidence`
-selects the same deterministic design ranks for each model, folds heavy + cognate
-light + every antigen chain, and writes one normalized row per diffusion sample:
+The GPU launcher selects the same deterministic design ranks for each model,
+folds three designs from each of ten held-out antigen clusters in study mode
+(one target/design in smoke), combines heavy + cognate light + every antigen
+chain, and writes one normalized row per diffusion sample:
 
 ```text
 embedder, run_id, target_id, design_index, sequence, predictor, sample_index,

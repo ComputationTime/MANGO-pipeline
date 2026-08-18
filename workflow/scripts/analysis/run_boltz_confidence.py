@@ -83,9 +83,17 @@ def run(designs_csv, records_csv, target_id, n_designs, seed, samples,
                 "has_inter_chain_clashes": "", "structure_path": str(structure),
                 "status": "ok" if structure.is_file() else "missing_structure",
             })
-    if not rows:
-        raise RuntimeError("Boltz completed without any confidence JSON outputs")
     sc.write_rows(rows, output_csv)
+    expected = {int(design.design_index) for _, design in jobs}
+    successful = {
+        int(row["design_index"]) for row in rows if row["status"] == "ok"
+    }
+    if successful != expected:
+        missing = sorted(expected - successful)
+        raise RuntimeError(
+            "Boltz did not produce a valid structure for every selected design; "
+            f"missing design indices {missing}; diagnostics: {output_csv}"
+        )
 
 
 def main():

@@ -71,9 +71,15 @@ def run(designs_csv, records_csv, target_id, n_designs, seed, samples,
                 "status": f"error: {type(exc).__name__}: {exc}",
             })
     sc.write_rows(rows, output_csv)
-    if not any(row["status"] == "ok" for row in rows):
+    expected = {int(design.design_index) for design in selected.itertuples(index=False)}
+    successful = {
+        int(row["design_index"]) for row in rows if row["status"] == "ok"
+    }
+    if successful != expected:
+        missing = sorted(expected - successful)
         raise RuntimeError(
-            f"Chai failed for every selected design; diagnostics: {output_csv}"
+            "Chai did not produce a valid structure for every selected design; "
+            f"missing design indices {missing}; diagnostics: {output_csv}"
         )
 
 

@@ -32,6 +32,12 @@ generation:
   top_p: 0.9
   temperature: 1.0
 
+# Small multi-target structure-confidence plumbing check.
+structure_prediction:
+  n_targets: 4
+  n_designs: 2
+  diffusion_samples: 1
+
 analysis:
   cohort:
     n_per_target: 5

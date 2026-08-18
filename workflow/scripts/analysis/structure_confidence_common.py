@@ -36,12 +36,18 @@ def select_designs(designs_csv, n_designs, seed):
     df = df.loc[df["status"] == "ok"].copy()
     if df.empty:
         raise RuntimeError(f"{designs_csv} contains no successful designs")
+    requested = int(n_designs)
+    if len(df) < requested:
+        raise RuntimeError(
+            f"{designs_csv} contains only {len(df)} successful designs; "
+            f"{requested} are required"
+        )
     df["design_index"] = pd.to_numeric(df["design_index"], errors="raise").astype(int)
     df["selection_key"] = [
         _rank(seed, target, index)
         for target, index in zip(df["target_id"], df["design_index"])
     ]
-    return df.sort_values(["selection_key", "design_index"]).head(int(n_designs))
+    return df.sort_values(["selection_key", "design_index"]).head(requested)
 
 
 def target_context(records_csv, target_id):

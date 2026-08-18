@@ -31,6 +31,12 @@ generation:
   top_p: 0.9
   temperature: 1.0
 
+# Minimal sequence -> structure -> confidence -> plot plumbing only.
+structure_prediction:
+  n_targets: 1
+  n_designs: 1
+  diffusion_samples: 1
+
 analysis:
   cohort:
     n_per_target: 2

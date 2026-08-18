@@ -38,6 +38,9 @@ def _gpu_report_specs():
                 "analysis_metrics": {
                     name: analysis_metric_csv(tag, name) for name in metric_names
                 },
+                "structure_confidence": (
+                    struct_run_marker(tag) if structure_confidence_enabled() else None
+                ),
                 "logs": {
                     "train": f"{LOG_DIR}/train_{run}.log",
                     "evaluate": f"{LOG_DIR}/evaluate_{run}.log",
@@ -92,6 +95,10 @@ rule gpu_embedder_result:
             for tag in ACTIVE_EMBEDDERS
             for metric in ("iglm", "antiberty", "ablang2", "germline", "biophysical")
         ],
+        structures=(
+            [struct_run_marker(tag) for tag in ACTIVE_EMBEDDERS]
+            if structure_confidence_enabled() else []
+        ),
 
 
 rule gpu_report:

@@ -4,7 +4,8 @@
 > milestone. The active Snakefile defaults to training/inference with the
 > one-hot antigen embedder and exposes sequence-only analysis explicitly.
 > Therapeutic targets, AF3, and TAP are deferred. Boltz-2 and Chai-1
-> structure confidence are available through the opt-in `structure_confidence` target.
+> structure confidence run by default on a bounded, cluster-diverse subset and
+> remain directly addressable through the `structure_confidence` target.
 
 The input/output contract of every module. This is the reference for *what
 crosses each boundary*; `planned_modules.md` covers implementation status and
@@ -531,7 +532,7 @@ and AbLang2 paired H|L confidence. Figure 4 records ANARCI's nearest heavy V/J
 calls, reconstructed germline reference, raw LD, and normalized LD. Figure 5
 records GRAVY and charge at pH 7.4.
 
-### 8b. Structure confidence (Aim 3) — opt-in
+### 8b. Structure confidence (Aim 3) — bounded default
 
 ```
 designs.csv + records.csv (generated H + cognate L + all antigen chains)
