@@ -20,8 +20,14 @@ Start from the repository root with:
 ./run_gpu.sh smoke
 ```
 
-Only after smoke succeeds (or its partial report has been understood and fixed)
-run:
+After smoke succeeds, validate the gated ESM3 and PyRosetta PRE dependencies
+that participate in the full study:
+
+```bash
+./run_gpu.sh smoke-all
+```
+
+Only after both smoke outcomes have been understood and fixed run:
 
 ```bash
 ./run_gpu.sh study
@@ -32,14 +38,18 @@ The launcher is the supported cloud interface; `mango/MANGORunner.py` is legacy.
 
 ## Current supported scope
 
-The default GPU modes run these antigen representations, sequentially on one
-GPU: `one_hot`, `biopython`, `esm2`, `esmif`, and `proteinmpnn`.
+The default full `study` runs all seven implemented antigen representations,
+sequentially on one GPU: `one_hot`, `biopython`, `pyrosetta_pre`, `esm2`,
+`esm3`, `esmif`, and `proteinmpnn`. Plain `smoke` and `small` retain the five
+non-gated validation methods; use `smoke-all` before the seven-method study.
 
-- ESM3 is opt-in with `smoke-esm3` / `study-esm3` and requires `HF_TOKEN` after
-  accepting the Hugging Face model terms.
-- PyRosetta PRE is opt-in with `smoke-pyrosetta` / `study-pyrosetta`; its real
-  mmCIF chain mapping still needs validation before scientific use.
-- `*-all` enables both optional methods.
+- ESM3 requires `HF_TOKEN` after accepting the Hugging Face model terms.
+- PyRosetta PRE participates in the full study, but its real mmCIF chain mapping
+  still needs validation in `smoke-all` before its scientific results are used.
+- Fixed-backbone Rosetta `InterfaceAnalyzer` scoring is different from the PRE
+  antigen embedder: it runs by default after Boltz/Chai in smoke and study and
+  is a quality-control analysis of predicted complexes.
+- `*-esm3`, `*-pyrosetta`, and `*-all` remain useful focused validation modes.
 - AF-M, AF3, TAP, therapeutic benchmark antibodies, and the eight therapeutic
   complex chains are deferred.
 - Boltz-2, Chai-1, and Figure 2 run by default on a bounded, cluster-diverse
@@ -110,8 +120,8 @@ batch embedding scripts reuse valid downloads and completed per-record outputs.
    silently fall back to CPU when `MANGO_REQUIRE_CUDA=1`.
 6. Rerun `./run_gpu.sh smoke`; report which embedders succeeded and their NLL and
    perplexity from the generated report.
-7. Do not launch `study` until the smoke outcome and any remaining optional
-   failures have been clearly reported to the user.
+7. Do not launch `study` until the `smoke` and `smoke-all` outcomes and any
+   special-dependency failures have been clearly reported to the user.
 
 When reporting a failure, include the exact embedder, failed stage, relevant log
 path, root cause, change made, and rerun result. Continue independently runnable

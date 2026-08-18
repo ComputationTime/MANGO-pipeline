@@ -239,6 +239,13 @@ structure_prediction:
   recycling_steps: 3
   use_msa_server: false
 
+# CPU-only Rosetta interface quality control. This scores fixed Boltz/Chai
+# coordinates and does not relax, dock, or redesign them. It runs by default
+# in smoke and study and can also be requested with the named target.
+rosetta_interface:
+  enabled: true
+  scorefxn: "ref2015"
+
 # --- Analysis ----------------------------------------------------------------
 analysis:
   # Which embedder tags appear in the comparison figures. null => active_embedders.
@@ -275,6 +282,7 @@ analysis:
   plots:
     fig1_nll:            {enabled: true}   # train/test NLL vs. Ag embedding
     fig2_structure_confidence: {enabled: true}  # Boltz/Chai confidence
+    rosetta_interface_plumbing: {enabled: true} # fixed-backbone interface QC
     fig3_ablikeness:     {enabled: true}   # IgLM / AntiBERTy / AbLang2
     fig4_ld_germline:    {enabled: true}   # LD-from-germline distributions
     fig5_developability: {enabled: true}   # GRAVY and charge@pH 7.4

@@ -1,0 +1,12 @@
+name: mango-analysis-rosetta
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - pip
+  - pip:
+      # Official academic/non-commercial PyRosetta distribution. The package
+      # contains the Rosetta database; no model weights are downloaded.
+      - --find-links=https://west.rosettacommons.org/pyrosetta/quarterly/release
+      - pyrosetta

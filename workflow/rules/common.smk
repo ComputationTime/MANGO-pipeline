@@ -302,6 +302,10 @@ def struct_run_marker(tag: str) -> str:
     return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/.confidence_complete"
 
 
+def rosetta_interface_csv(tag: str, instance: str, method: str) -> str:
+    return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/{method}_rosetta.csv"
+
+
 def complex_metrics_csv(tag: str, instance: str) -> str:
     return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/complex_metrics.csv"
 
@@ -327,10 +331,14 @@ if _bad:
 def enabled_figures() -> list:
     figures = []
     structure_enabled = bool(config["structure_prediction"].get("enabled", False))
+    rosetta_enabled = bool(config.get("rosetta_interface", {}).get("enabled", False))
     for name, settings in config["analysis"]["plots"].items():
         if not settings.get("enabled", True):
             continue
         if name == "fig2_structure_confidence" and not structure_enabled:
+            continue
+        if name == "rosetta_interface_plumbing" and not (
+                structure_enabled and rosetta_enabled):
             continue
         figures.append(name)
     return figures
@@ -443,15 +451,26 @@ def structure_confidence_enabled() -> bool:
     return bool(config["structure_prediction"].get("enabled", False))
 
 
+def rosetta_interface_enabled() -> bool:
+    return bool(config.get("rosetta_interface", {}).get("enabled", False))
+
+
 def structure_confidence_outputs(tag: str) -> list:
     """All normalized structure-confidence tables expected for one run."""
     if not structure_confidence_enabled():
         return []
-    return [
+    outputs = [
         struct_scores_csv(tag, instance, method)
         for instance in sp_targets()
         for method in sp_methods()
     ]
+    if rosetta_interface_enabled():
+        outputs.extend(
+            rosetta_interface_csv(tag, instance, method)
+            for instance in sp_targets()
+            for method in sp_methods()
+        )
+    return outputs
 
 
 # --- Wildcard hygiene --------------------------------------------------------

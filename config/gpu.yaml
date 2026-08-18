@@ -1,4 +1,5 @@
-# Single-NVIDIA-GPU production overlay. Run through ./run_gpu.sh study.
+# Single-NVIDIA-GPU base overlay. The launcher adds config/gpu_all.yaml for a
+# plain full study; smoke and small retain this five-method validation set.
 # GPU-heavy jobs declare gpu=1 and the local profile exposes exactly one GPU
 # resource, so model loads and training runs are serialized on an RTX A6000.
 experiment:

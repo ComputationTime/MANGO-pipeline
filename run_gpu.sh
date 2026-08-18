@@ -4,7 +4,7 @@ set -euo pipefail
 # One-command local NVIDIA GPU runner.
 #   ./run_gpu.sh smoke        five-record plumbing run (default)
 #   ./run_gpu.sh small        bounded multi-record validation run
-#   ./run_gpu.sh study        full configured SAbDab2 study
+#   ./run_gpu.sh study        full seven-embedder SAbDab2 study
 #   ./run_gpu.sh smoke-esm3   smoke + gated ESM3
 #   ./run_gpu.sh study-esm3   full study + gated ESM3
 #   ./run_gpu.sh smoke-pyrosetta / study-pyrosetta
@@ -47,7 +47,7 @@ export TORCH_HOME="${TORCH_HOME:-$ROOT_DIR/artifacts/cache/torch}"
 export CONDA_PKGS_DIRS="${CONDA_PKGS_DIRS:-$ROOT_DIR/.snakemake/conda-pkgs}"
 mkdir -p "$HF_HOME" "$TORCH_HOME" "$CONDA_PKGS_DIRS"
 
-if [[ "$MODE" == *-esm3 || "$MODE" == *-all ]]; then
+if [[ "$MODE" == "study" || "$MODE" == *-esm3 || "$MODE" == *-all ]]; then
   if [[ -z "${HF_TOKEN:-}" ]]; then
     echo "Warning: HF_TOKEN is unset; ESM3 may fail, but other embedders will still run." >&2
   fi
@@ -67,7 +67,9 @@ if [[ "$MODE" == smoke* ]]; then
 elif [[ "$MODE" == small* ]]; then
   CONFIG_ARGS+=(config/small.yaml)
 fi
-if [[ "$MODE" == *-esm3 ]]; then
+if [[ "$MODE" == "study" ]]; then
+  CONFIG_ARGS+=(config/gpu_all.yaml)
+elif [[ "$MODE" == *-esm3 ]]; then
   CONFIG_ARGS+=(config/gpu_esm3.yaml)
 elif [[ "$MODE" == *-pyrosetta ]]; then
   CONFIG_ARGS+=(config/gpu_pyrosetta.yaml)
@@ -79,7 +81,9 @@ SNAKEMAKE=("$DRIVER/bin/snakemake" -s workflow/Snakefile \
   --profile workflow/profiles/gpu "${CONFIG_ARGS[@]}" --rerun-incomplete)
 
 EMBEDDERS=(one_hot biopython esm2 esmif proteinmpnn)
-if [[ "$MODE" == *-pyrosetta || "$MODE" == *-all ]]; then
+if [[ "$MODE" == "study" ]]; then
+  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esmif proteinmpnn)
+elif [[ "$MODE" == *-pyrosetta || "$MODE" == *-all ]]; then
   EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esmif proteinmpnn)
 fi
 if [[ "$MODE" == *-esm3 ]]; then

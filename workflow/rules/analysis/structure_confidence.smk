@@ -74,3 +74,55 @@ rule structure_confidence:
         scores=[struct_run_marker(tag) for tag in ANALYSIS_EMBEDDERS],
         figure=figure_path("fig2_structure_confidence"),
         data=figure_data_path("fig2_structure_confidence"),
+
+
+rule analysis_rosetta_interface:
+    """Fixed-backbone Rosetta interface scores for one predictor cohort."""
+    input:
+        scores=lambda w: struct_scores_csv(
+            tag_for_run(w.run), w.instance, w.predictor),
+        structures=lambda w: struct_raw_dir(
+            tag_for_run(w.run), w.instance, w.predictor),
+    output:
+        f"{ANALYSIS_DIR}/{{run}}/structures/{{instance}}/{{predictor}}_rosetta.csv",
+    params:
+        scorefxn=config.get("rosetta_interface", {}).get("scorefxn", "ref2015"),
+    log:
+        f"{LOG_DIR}/rosetta_interface_{{run}}_{{instance}}_{{predictor}}.log",
+    threads: 1
+    resources:
+        mem_mb=8000,
+    wildcard_constraints:
+        predictor="boltz2|chai",
+    conda:
+        "../../envs/analysis_rosetta.yaml"
+    script:
+        "../../scripts/analysis/run_rosetta_interface.py"
+
+
+rule plot_rosetta_interface:
+    """Minimal Rosetta interface-energy plumbing figure."""
+    input:
+        scores=lambda w: [
+            rosetta_interface_csv(tag, instance, method)
+            for tag in ANALYSIS_EMBEDDERS
+            for instance in sp_targets()
+            for method in sp_methods()
+        ],
+    output:
+        figure=f"{FIGURES_DIR}/rosetta_interface_plumbing.{config['analysis']['format']}",
+        data=f"{FIGURES_DIR}/rosetta_interface_plumbing_data.csv",
+    params:
+        dpi=config["analysis"]["dpi"],
+    log:
+        f"{LOG_DIR}/plot_rosetta_interface.log",
+    conda:
+        "../../envs/analysis.yaml"
+    script:
+        "../../scripts/analysis/plot_rosetta_interface.py"
+
+
+rule rosetta_interface:
+    """Convenience target for the Rosetta outputs also run by smoke/study."""
+    input:
+        rules.plot_rosetta_interface.output,

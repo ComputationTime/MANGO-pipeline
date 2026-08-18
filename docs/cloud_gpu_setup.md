@@ -63,7 +63,8 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 
 | Mode | Embedders | Extra user action |
 |---|---|---|
-| `smoke` / `study` | one-hot, BioPython, ESM2, ESM-IF, ProteinMPNN | none |
+| `smoke` / `small` | one-hot, BioPython, ESM2, ESM-IF, ProteinMPNN; Rosetta interface QC after Boltz/Chai | PyRosetta academic/non-commercial eligibility |
+| `study` | all seven implemented embedders, including ESM3 and PyRosetta PRE; Rosetta interface QC | accepted ESM3 terms, `HF_TOKEN`, and PyRosetta eligibility |
 | `*-esm3` | default set plus ESM3 | accept model terms and set `HF_TOKEN` |
 | `*-pyrosetta` | default set plus PyRosetta PRE | academic/non-commercial eligibility |
 | `*-all` | every implemented embedder above | both requirements |
@@ -71,7 +72,8 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 AF-M is not included in `all`: it is still an implementation stub and requires
 an MSA/database/container design. AF3 remains cluster-deferred. Boltz-2 and
 Chai-1 run automatically after generation on a mode-specific bounded subset,
-and Figure 2 is part of strict GPU completion.
+followed by fixed-backbone Rosetta interface quality-control scoring. Figure 2
+and the minimal Rosetta paired plot are part of strict GPU completion.
 
 ## 5. Optional gated setup
 
@@ -103,8 +105,11 @@ if your institution requires a signed licence or credentials. Commercial or
 fee-for-service work requires separate permission. The workflow cannot accept
 legal terms on your behalf.
 
-PyRosetta is still scientifically marked as opt-in because its mmCIF author
-chain mapping needs validation on the smoke structures before a full study.
+The `pyrosetta_pre` antigen representation is still scientifically opt-in
+because its SAbDab mmCIF author-chain mapping needs validation before a full
+study. The default post-generation `InterfaceAnalyzer` step is a separate,
+validated plumbing path over Boltz/Chai structures with an explicit H/L/antigen
+chain contract.
 
 ## 6. Download-only check (optional but useful)
 
@@ -142,7 +147,7 @@ Only after it finishes, launch the full filtered SAbDab2 study:
 ./run_gpu.sh study
 ```
 
-For optional methods, preserve the same progression:
+Plain study includes both ESM3 and PyRosetta PRE. Validate both first with:
 
 ```bash
 ./run_gpu.sh smoke-esm3
@@ -152,8 +157,11 @@ For optional methods, preserve the same progression:
 ./run_gpu.sh study-pyrosetta
 
 ./run_gpu.sh smoke-all
-./run_gpu.sh study-all
+./run_gpu.sh study
 ```
+
+The suffixed study modes remain available for focused six- or seven-method
+reruns, but `study-all` and plain `study` now select the same seven embedders.
 
 Even `smoke` downloads the complete SAbDab2 archive once (about 876 MB
 compressed and roughly 4.1 GB extracted), because Zenodo distributes it as one

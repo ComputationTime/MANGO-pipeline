@@ -43,9 +43,10 @@ fetch → standardize → process → embed → train → evaluate
   runs Boltz-2 and Chai-1 on a bounded, cluster-diverse generated subset. TAP
   remains deferred.
 
-ESM3 is an opt-in sixth representation because its weights require accepting
-the Hugging Face terms and supplying a token. PyRosetta PRE is a seventh,
-academic/non-commercial opt-in and still needs a real mmCIF smoke validation.
+The full `study` now includes ESM3 as the sixth representation and PyRosetta
+PRE as the seventh. ESM3 requires accepted Hugging Face terms and `HF_TOKEN`;
+PyRosetta requires academic/non-commercial eligibility, and its PRE results
+must retain the mmCIF chain-mapping validation warning.
 AF-M is a stub. Therapeutic targets, AF3, and TAP remain deferred.
 Boltz-2/Chai-1 structure confidence has passed a two-sequence GPU plumbing
 check and now runs by default in smoke/small/study with mode-specific bounds.
@@ -123,9 +124,11 @@ five-record plumbing check:
 ./run_gpu.sh smoke
 ```
 
-Then launch the full filtered SAbDab2 study with one command:
+Then accept the ESM3 terms, set `HF_TOKEN`, and validate the two additional
+study embeddings before launching the full filtered SAbDab2 study:
 
 ```bash
+./run_gpu.sh smoke-all
 ./run_gpu.sh study
 ```
 
@@ -190,6 +193,18 @@ AF3 is deferred to cluster-side execution and later ingestion through the same
 table contract. Boltz and Chai use single-sequence mode unless
 `structure_prediction.use_msa_server` is explicitly enabled.
 
+Smoke and study now also apply compute-minimal Rosetta quality-control scoring
+to those structures. To request only that analysis and its figure, run:
+
+```bash
+snakemake --sdm conda --cores 1 rosetta_interface
+```
+
+This CPU target applies fixed-backbone `InterfaceAnalyzer` scoring to
+the highest-confidence Boltz and Chai structure for each generated design. It
+does not relax, dock, or redesign the complexes. Its energies measure the raw
+predicted coordinates and must not be interpreted as binding affinities.
+
 To include ESM3, first accept access to `esm3-sm-open-v1`, then export the
 standard Hugging Face token and choose the corresponding mode:
 
@@ -202,11 +217,12 @@ export HF_TOKEN=...
 Do not start with `study-esm3`: validate the token, environment, and model
 download with `smoke-esm3` first.
 
-PyRosetta and combined modes follow the same pattern:
+Because plain `study` now uses all seven embedders, validate both special
+dependencies together before launching it:
 
 ```bash
 ./run_gpu.sh smoke-pyrosetta   # then study-pyrosetta
-./run_gpu.sh smoke-all         # ESM3 + PyRosetta; then study-all
+./run_gpu.sh smoke-all         # ESM3 + PyRosetta; then plain study
 ```
 
 To check only environments, connectivity, authorization, and weights:
@@ -252,7 +268,8 @@ snakemake --configfile config/smoke.yaml --sdm conda --cores 4 analysis
 The main settings are in `config/config.yaml`. In particular:
 
 - `active_embedders` is restricted to `one_hot` in the repository default;
-  `config/gpu.yaml` selects the five supported cloud representations.
+  the launcher combines `config/gpu.yaml` and `config/gpu_all.yaml` for the
+  seven-embedder full study while ordinary smoke retains five embedders.
 - `processing.val.cluster_column` identifies the leakage boundary;
   `processing.val.fraction` is the fraction of training clusters held out.
 - `model.*` controls training and early stopping.
@@ -295,11 +312,11 @@ snakemake --sdm conda --cores 1 --dry-run
 
 AlphaFold-Multimer, AF3, therapeutic targets, and TAP are not included by the
 GPU completion target. Boltz-2 and Chai-1 confidence and Figure 2 are included
-on the bounded default subset. PyRosetta PRE and ESM3 are
-available only through explicit opt-in modes. ESM3 and ESM-IF
-were adapted from the contributed `mango-embedders` module. ESM3 remains
-sequence-only and gated; ESM-IF encodes antigen chains independently rather
-than as a joint multichain complex.
+on the bounded default subset. PyRosetta PRE and ESM3 participate in the full
+seven-embedder study and also remain available through focused suffixed modes.
+ESM3 and ESM-IF were adapted from the contributed `mango-embedders` module.
+ESM3 remains sequence-only and gated; ESM-IF encodes antigen chains
+independently rather than as a joint multichain complex.
 
 The implemented Boltz/Chai contract and intended AF3 ingestion are documented in
 `docs/structure_prediction_plan.md`.
