@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MANGO Project Guide</title><link rel="stylesheet" href="assets/style.css"><script defer src="assets/nav.js"></script></head>
+<body data-page="home"><header><div class="masthead"><a class="title" href="index.html">MANGO Project Guide</a><span class="subtitle">Antigen + light chain → generated heavy chain</span></div></header>
+<div class="layout"><nav>
+<h2>Start here</h2><a data-page="home" href="index.html">Home</a><a data-page="hypothesis" href="hypothesis.html">Hypothesis and study</a><a data-page="concepts" href="concepts.html">Concepts from first principles</a><a data-page="architecture" href="architecture.html">Architecture and data flow</a><a data-page="running" href="running.html">Running the project</a>
+<h2>Workflow modules</h2><a href="modules/index.html">Module directory</a><a href="modules/common.html">Common registry</a><a href="modules/fetch.html">Fetch</a><a href="modules/standardize.html">Standardize</a><a href="modules/process.html">Process and split</a><a href="modules/embed.html">Embedding</a><a href="modules/model.html">Model and generation</a><a href="modules/analysis.html">Analysis modules</a><a href="modules/structure-confidence.html">Boltz and Chai</a><a href="modules/gpu.html">GPU orchestration</a>
+<h2>Reference</h2><a href="glossary.html">Glossary</a><a href="status.html">Supported and deferred scope</a></nav>
+<main><h1>MANGO, explained from the beginning</h1>
+<p class="lede">MANGO is an experimental pipeline for asking how the way we describe an antigen changes a model’s ability to generate an antibody heavy chain when the antigen and matching light chain are provided.</p>
+<div class="callout good"><strong>The invariant task:</strong> every trained model receives an antigen representation and a light-chain representation. It must produce the heavy-chain variable sequence. The true heavy chain is never part of the conditioning input.</div>
+<h2>What problem is this project studying?</h2>
+<p>An antibody recognizes a molecular target called an <em>antigen</em>. An antibody usually contains paired heavy and light protein chains. Their three-dimensional arrangement and amino-acid sequences jointly determine recognition. MANGO fixes the light chain, varies how the antigen is encoded, and asks the model to generate the corresponding heavy chain. This isolates one experimental variable: the antigen representation.</p>
+<div class="flow"><span>Antigen structure or sequence</span><b>+</b><span>cognate light chain</span><b>→</b><span>MANGO model</span><b>→</b><span>generated heavy chain</span></div>
+<h2>Recommended reading path</h2>
+<div class="card-grid">
+<section class="card"><h3><a href="concepts.html">1. Learn the vocabulary</a></h3><p>Antibodies, amino-acid sequences, embeddings, training, held-out data, likelihood, and workflow graphs.</p></section>
+<section class="card"><h3><a href="hypothesis.html">2. Understand the experiment</a></h3><p>The hypothesis, controlled variable, comparison groups, leakage prevention, and what the figures can and cannot establish.</p></section>
+<section class="card"><h3><a href="architecture.html">3. Follow the data</a></h3><p>Trace one complex from raw SAbDab2 data through embeddings, training, generation, scoring, and plots.</p></section>
+<section class="card"><h3><a href="modules/index.html">4. Open a module</a></h3><p>Each active Snakemake file has a self-contained explanation of inputs, outputs, rules, scripts, environments, and failure modes.</p></section>
+</div>
+<h2>Current workflow at a glance</h2>
+<table><thead><tr><th>Stage</th><th>Purpose</th><th>Main output</th><th>Status</th></tr></thead><tbody>
+<tr><td>Fetch and prepare</td><td>Download SAbDab2, normalize its schema, filter structures, and make leakage-safe splits.</td><td><code>records.csv</code></td><td><span class="status supported">supported</span></td></tr>
+<tr><td>Represent inputs</td><td>Encode the antigen in several ways and encode the light chain with AbLang2 while masking the heavy slot.</td><td>Per-record <code>.pt</code> tensors</td><td><span class="status supported">supported</span></td></tr>
+<tr><td>Learn and test</td><td>Train one otherwise-identical MANGO model per antigen representation; evaluate negative log-likelihood and reconstruct held-out heavy chains.</td><td>Checkpoints, metrics, predictions</td><td><span class="status supported">supported</span></td></tr>
+<tr><td>Generate and analyze</td><td>Create de novo heavy chains for diverse, held-out antigen clusters and score antibody-likeness, germline distance, and simple developability.</td><td>Design tables and Figures 1, 3, 4, 5</td><td><span class="status supported">supported</span></td></tr>
+<tr><td>Fold complexes</td><td>Predict generated heavy + light + antigen structures with Boltz-2 and Chai-1 and plot confidence.</td><td>Normalized confidence and Figure 2</td><td><span class="status optin">opt-in</span></td></tr>
+</tbody></table>
+<h2>Where the code lives</h2>
+<p><code>workflow/Snakefile</code> includes the active rule modules. <code>workflow/rules/</code> describes dependencies and outputs. <code>workflow/scripts/</code> performs scientific computation. <code>workflow/envs/</code> isolates incompatible software. <code>config/</code> selects experimental settings. Generated data, model weights, caches, and results stay under <code>artifacts/</code> or <code>.snakemake/</code> and are not committed.</p>
+<div class="pager"><span></span><a href="concepts.html">Next: concepts from first principles →</a></div></main></div><footer>This guide documents the active repository state. Follow the launcher and repository instructions for authoritative execution.</footer></body></html>

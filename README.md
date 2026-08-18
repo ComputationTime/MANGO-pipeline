@@ -39,14 +39,20 @@ fetch → standardize → process → embed → train → evaluate
   held-out record.
 - `generate` produces the configured number of de novo heavy chains for a
   bounded set of held-out records.
-- `analysis` is explicit and produces handbook Figures 1, 3, 4, and 5. Figure 2
-  and TAP are not dependencies of this target.
+- `analysis` is explicit and produces handbook Figures 1, 3, 4, and 5.
+  Figure 2 is available through the separate opt-in `structure_confidence`
+  target; neither Figure 2 nor TAP is a dependency of the supported GPU target.
 
 ESM3 is an opt-in sixth representation because its weights require accepting
 the Hugging Face terms and supplying a token. PyRosetta PRE is a seventh,
 academic/non-commercial opt-in and still needs a real mmCIF smoke validation.
-AF-M is a stub. Therapeutic targets, structure prediction, Figure 2, and TAP
-remain deferred.
+AF-M is a stub. Therapeutic targets, AF3, and TAP remain deferred.
+Boltz-2/Chai-1 structure confidence is opt-in and has passed a two-sequence GPU
+plumbing check; it is not part of the supported smoke/study completion target.
+
+For a beginner-oriented, linked explanation of the hypothesis, architecture,
+terminology, and every Snakemake module, open
+[`docs/site/index.html`](docs/site/index.html) in a web browser.
 
 ## Repository layout
 
@@ -58,6 +64,7 @@ workflow/scripts/              executable stage implementations
 workflow/envs/                 isolated rule environments
 mango/utils/                   model components used by the workflow
 tests/                         fast contract tests
+docs/site/index.html           linked beginner-oriented project guide
 artifacts/                     generated data and models; ignored by Git
 ```
 
@@ -165,6 +172,21 @@ and the GPU/driver preflight report. Snakemake keeps successful outputs, so reru
 the same command resumes missing work. Batch embedding also reuses valid
 per-record outputs after an interrupted batch.
 
+Structure confidence from Boltz-2 and Chai-1 is an opt-in analysis and is not
+part of `run_gpu.sh smoke` or `study`. After designs exist, run:
+
+```bash
+.snakemake/gpu-driver/bin/snakemake -s workflow/Snakefile \
+  --profile workflow/profiles/gpu \
+  --configfile config/gpu.yaml config/structure.yaml structure_confidence
+```
+
+This folds the configured deterministic design subset as heavy + cognate light +
+antigen complexes, writes normalized confidence tables, and renders Figure 2.
+AF3 is deferred to cluster-side execution and later ingestion through the same
+table contract. Boltz and Chai use single-sequence mode unless
+`structure_prediction.use_msa_server` is explicitly enabled.
+
 To include ESM3, first accept access to `esm3-sm-open-v1`, then export the
 standard Hugging Face token and choose the corresponding mode:
 
@@ -269,11 +291,12 @@ snakemake --sdm conda --cores 1 --dry-run
 ## Deferred work
 
 AlphaFold-Multimer, Figure 2, structure prediction, therapeutic targets, and
-TAP are not included by the GPU completion target. PyRosetta PRE and ESM3 are
+TAP are not included by the GPU completion target. Boltz-2 and Chai-1 confidence
+are available only through the separate `structure_confidence` target. PyRosetta PRE and ESM3 are
 available only through explicit opt-in modes. ESM3 and ESM-IF
 were adapted from the contributed `mango-embedders` module. ESM3 remains
 sequence-only and gated; ESM-IF encodes antigen chains independently rather
 than as a joint multichain complex.
 
-The intended AF3/Boltz/Chai integration is documented in
+The implemented Boltz/Chai contract and intended AF3 ingestion are documented in
 `docs/structure_prediction_plan.md`.

@@ -3,7 +3,8 @@
 > This document includes planned interfaces beyond the first completion
 > milestone. The active Snakefile defaults to training/inference with the
 > one-hot antigen embedder and exposes sequence-only analysis explicitly.
-> Therapeutic targets, structure prediction, and TAP are deferred.
+> Therapeutic targets, AF3, and TAP are deferred. Boltz-2 and Chai-1
+> structure confidence are available through the opt-in `structure_confidence` target.
 
 The input/output contract of every module. This is the reference for *what
 crosses each boundary*; `planned_modules.md` covers implementation status and
@@ -60,7 +61,7 @@ Conventions used below:
 | `active_embedders` | which tags this invocation runs |
 | `model` | architecture, training hyperparameters, retrain gating |
 | `generation` | `source` split, target cap, designs per target, sampling |
-| `structure_prediction` | predictors, design cap, targets (null ⇒ follow generation), scores |
+| `structure_prediction` | local predictors, deterministic design cap, targets (null ⇒ follow generation), sampling/recycling and optional MSA service |
 | `analysis` | compared embedders, metrics, figures, format |
 | `weights` | external weight roots and source URLs |
 
@@ -530,22 +531,24 @@ and AbLang2 paired H|L confidence. Figure 4 records ANARCI's nearest heavy V/J
 calls, reconstructed germline reference, raw LD, and normalized LD. Figure 5
 records GRAVY and charge at pH 7.4.
 
-### 8b. Structure prediction (Aim 3) — deferred
+### 8b. Structure confidence (Aim 3) — opt-in
 
 ```
-designs.csv + the structure it was designed against (.cif)
-  → analysis/<run>/structures/<id>/<sp_method>_scores.csv
+designs.csv + records.csv (generated H + cognate L + all antigen chains)
+  → analysis/<run>/structures/<id>/<predictor>_raw/
+  → analysis/<run>/structures/<id>/<predictor>_confidence.csv
 ```
 
 | | |
 |---|---|
-| rule | `analysis_predict_structures` · alias `structures` |
-| script | `analysis_predict_structures.py` |
-| wildcards | `{run}`, `{instance}`, `{sp_method}` ∈ `af3 \| boltz2 \| chai` |
+| rules | `predict_boltz_confidence`, `predict_chai_confidence` |
+| target | `structure_confidence` |
+| predictors | `boltz2`, `chai`; AF3 ingestion deferred |
 
 ```
-embedder, run_id, target_id, sp_method, design_index, sequence,
-ptm, iptm, pae, status, structure_path
+embedder, run_id, target_id, design_index, sequence, predictor, sample_index,
+confidence_score, ptm, iptm, complex_plddt, mean_pae,
+has_inter_chain_clashes, structure_path, status
 ```
 
 Capped at `structure_prediction.n_designs` per target — folding every design is

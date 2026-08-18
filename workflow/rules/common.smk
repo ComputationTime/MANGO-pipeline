@@ -291,7 +291,11 @@ def figure_data_path(name: str) -> str:
 
 
 def struct_scores_csv(tag: str, instance: str, method: str) -> str:
-    return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/{method}_scores.csv"
+    return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/{method}_confidence.csv"
+
+
+def struct_raw_dir(tag: str, instance: str, method: str) -> str:
+    return f"{ANALYSIS_DIR}/{run_id(tag)}/structures/{instance}/{method}_raw"
 
 
 def complex_metrics_csv(tag: str, instance: str) -> str:
@@ -406,7 +410,15 @@ def sp_targets() -> list:
 
 
 def sp_methods() -> list:
-    return list(config["structure_prediction"]["methods"])
+    methods = list(config["structure_prediction"]["methods"])
+    supported = {"boltz2", "chai"}
+    unknown = sorted(set(methods) - supported)
+    if unknown:
+        raise ValueError(
+            f"local structure-confidence method(s) {unknown} are not supported; "
+            "AF3 remains deferred to cluster-side ingestion"
+        )
+    return methods
 
 
 # --- Wildcard hygiene --------------------------------------------------------

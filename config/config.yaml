@@ -8,8 +8,8 @@
 # The long-term experimental axis is `embedders`: multiple antigen
 # representations, one trained model each, identical in every other respect.
 # The first milestone activates only the one-hot baseline and covers training,
-# inference, and the sequence-only handbook figures. Additional antigen
-# representations, structure prediction, and TAP are deferred.
+# inference, and the sequence-only handbook figures. Boltz-2/Chai-1 structure
+# confidence is a separate, unvalidated opt-in; AF3 and TAP are deferred.
 #
 # Study design (3rdYear_NIH_Grant_Style.pdf):
 #   Aim 1 -> train 8 models differing only in antigen representation
@@ -214,10 +214,13 @@ generation:
       enabled: false
       prompt_prefix_len: 5
 
-# --- Deferred: structure prediction of designs in complex -------------------
+# --- Opt-in: structure confidence for generated complexes -------------------
 structure_prediction:
   enabled: false
-  methods: ["af3", "boltz2", "chai"]
+  # Local opt-in backends. AF3 uses the same normalized contract but remains
+  # deferred to cluster-side ingestion because its weights are gated.
+  methods: ["boltz2", "chai"]
+  deferred_methods: ["af3"]
   # Handbook figure 2: n=30 designs per trained model, on a single target.
   n_designs: 30
   # Which of the generation structures get folded. null => the first
@@ -225,8 +228,10 @@ structure_prediction:
   # actually designed against instead of naming a PDB that may not be in play.
   targets: null
   n_targets: 1
-  # Scores lifted from each predictor's output.
-  scores: ["ptm", "iptm", "pae"]
+  selection_seed: 13
+  diffusion_samples: 5
+  recycling_steps: 3
+  use_msa_server: false
 
 # --- Analysis ----------------------------------------------------------------
 analysis:
@@ -263,6 +268,7 @@ analysis:
   # reproduces one panel family from the handbook figure plan.
   plots:
     fig1_nll:            {enabled: true}   # train/test NLL vs. Ag embedding
+    fig2_structure_confidence: {enabled: false} # Boltz/Chai confidence
     fig3_ablikeness:     {enabled: true}   # IgLM / AntiBERTy / AbLang2
     fig4_ld_germline:    {enabled: true}   # LD-from-germline distributions
     fig5_developability: {enabled: true}   # GRAVY and charge@pH 7.4

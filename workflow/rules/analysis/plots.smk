@@ -4,6 +4,30 @@ _PLOT_LABELS = {tag: embedder_label(tag) for tag in ANALYSIS_EMBEDDERS}
 _DPI = config["analysis"]["dpi"]
 
 
+rule plot_fig2_structure_confidence:
+    input:
+        scores=lambda w: [
+            struct_scores_csv(tag, instance, method)
+            for tag in ANALYSIS_EMBEDDERS
+            for instance in sp_targets()
+            for method in sp_methods()
+        ],
+    output:
+        figure=figure_path("fig2_structure_confidence"),
+        data=figure_data_path("fig2_structure_confidence"),
+    params:
+        embedders=ANALYSIS_EMBEDDERS,
+        labels=_PLOT_LABELS,
+        methods=config["structure_prediction"]["methods"],
+        dpi=_DPI,
+    log:
+        f"{LOG_DIR}/plot_fig2_structure_confidence.log",
+    conda:
+        "../../envs/analysis_plot.yaml"
+    script:
+        "../../scripts/analysis/plot_structure_confidence.py"
+
+
 rule plot_fig1_nll:
     input:
         evals=[eval_json(tag) for tag in ANALYSIS_EMBEDDERS],

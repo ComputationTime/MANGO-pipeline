@@ -3,8 +3,8 @@
 > Repository default: one-hot antigen embedding. The local-GPU overlay runs
 > one-hot, BioPython, ESM2, ESM-IF, and ProteinMPNN sequentially, with ESM3 as
 > an authenticated opt-in and PyRosetta PRE as an academic/non-commercial
-> validation opt-in. Therapeutic targets, structure prediction (Figure 2),
-> AF-M, and TAP are deferred.
+> validation opt-in. Therapeutic targets, AF-M, AF3, and TAP are deferred.
+> Boltz-2/Chai-1 Figure 2 confidence is available as an unvalidated opt-in module.
 
 What each module does, what it emits, and exactly what is left to implement.
 The global state file (`config/config.yaml`) is the single source of truth for
@@ -38,7 +38,7 @@ fetch → standardize → process → embed one_hot + AbLang2 → train
 | `evaluate` | `eval.json` → figure 1 | works |
 | `predict` | `predictions_test.csv` | works |
 | `generate` | `designs/<run>/<id>/designs.csv` | works |
-| `analysis` | cohort + modular metrics + figures | Figures 1, 3, 4, and 5 work; Figure 2/TAP deferred |
+| `analysis` | cohort + modular metrics + figures | Figures 1, 3, 4, and 5 work; opt-in Figure 2 supports Boltz-2 and Chai-1 confidence; AF3/TAP deferred |
 
 ## Module contracts
 
@@ -164,7 +164,7 @@ representations rather than describing one.
 | figure | source | status |
 |---|---|---|
 | `fig1_nll` | `eval.json` | **works** — train and cluster-held-out test NLL |
-| `fig2_ptm` | structure prediction | **deferred** |
+| `fig2_structure_confidence` | Boltz-2/Chai-1 normalized confidence tables | **opt-in** — ranking confidence, pTM, ipTM; AF3 deferred |
 | `fig3_ablikeness` | independent LM score tables | **works** — IgLM, AntiBERTy, AbLang2 |
 | `fig4_ld_germline` | ANARCI germline table | **works** — raw and normalized LD |
 | `fig5_developability` | BioPython table | **works** — GRAVY and charge@7.4; TAP deferred |
@@ -174,10 +174,11 @@ successful designs. Metric tools are isolated into separate environments and
 tables; plotting jobs perform no model inference. Figure 4 stores ANARCI's
 nearest heavy V/J calls and the reconstructed germline reference used for LD.
 
-Structure prediction (`analysis_predict_structures.py`) and complex metrics
-(`analysis_complex_metrics.py`) are stubs with their output schemas fixed.
-Suggested order: Boltz2 or Chai first (no gated weights), then pDockQ2 (needs no
-new dependencies), then interface hydrophobicity, CDR SAP, and interface ddG.
+Boltz-2 and Chai-1 structure confidence execution is available through the
+opt-in `structure_confidence` target and separate environments; GPU smoke
+validation remains required. AF3 ingestion and complex metrics remain deferred.
+Suggested next order: AF3 ingestion, then pDockQ2, interface hydrophobicity, CDR
+SAP, and interface ddG.
 
 ## Conventions for new modules
 

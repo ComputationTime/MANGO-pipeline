@@ -1,0 +1,10 @@
+# Opt-in local structure-confidence analysis. Run with config/gpu.yaml after the
+# corresponding smoke/study designs exist; this is not part of run_gpu.sh.
+structure_prediction:
+  enabled: true
+  methods: ["boltz2", "chai"]
+
+analysis:
+  plots:
+    fig2_structure_confidence:
+      enabled: true

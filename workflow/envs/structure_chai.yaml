@@ -1,0 +1,10 @@
+name: mango-structure-chai
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy
+  - pip
+  - pip:
+      - chai_lab==0.6.1

@@ -1,0 +1,10 @@
+name: mango-structure-boltz
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy
+  - pip
+  - pip:
+      - boltz[cuda]==2.2.1
