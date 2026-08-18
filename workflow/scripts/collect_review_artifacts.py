@@ -51,7 +51,12 @@ def main() -> None:
     output = ROOT / (args.output or f"review/{args.tier}_artifacts")
 
     if output.exists() and not (output / MARKER).exists():
-        raise SystemExit(f"refusing to replace unmarked directory: {output}")
+        # A fresh checkout can contain only the curated, tracked GitHub review
+        # exports. They are explicitly preserved below, so this is a safe
+        # bootstrap case; refuse every other unmarked directory.
+        entries = {path.name for path in output.iterdir()}
+        if entries - {"github"}:
+            raise SystemExit(f"refusing to replace unmarked directory: {output}")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))

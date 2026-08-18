@@ -57,6 +57,11 @@ def score_antiberty(cohort_csv, batch_size, out_csv):
     df.to_csv(out_csv, index=False)
     print(f"AntiBERTy scored {sum(s == 'ok' for s in statuses)}/{len(df)} "
           f"sequences on {model.device} -> {out_csv}", flush=True)
+    if any(status != "ok" for status in statuses):
+        raise RuntimeError(
+            "AntiBERTy did not score every selected sequence; diagnostics were "
+            f"written to {out_csv}"
+        )
     return df
 
 

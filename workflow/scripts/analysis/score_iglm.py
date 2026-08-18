@@ -29,6 +29,11 @@ def score_iglm(cohort_csv, chain_token, species_token, out_csv):
     Path(out_csv).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_csv, index=False)
     print(f"IgLM scored {sum(s == 'ok' for s in statuses)}/{len(df)} -> {out_csv}", flush=True)
+    if any(status != "ok" for status in statuses):
+        raise RuntimeError(
+            "IgLM did not score every selected sequence; diagnostics were "
+            f"written to {out_csv}"
+        )
     return df
 
 
