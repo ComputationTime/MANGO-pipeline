@@ -188,13 +188,16 @@ generation:
   # Every design is a HEAVY chain conditioned on that structure's antigen
   # embedding plus its light chain, so the source must supply both.
   source: "test"
-  # Cap on how many structures from `source` are used. null => all of them.
-  # Selection is the first N ids in sorted order, so it is reproducible and
-  # inspectable. Generation is the most expensive step in the pipeline; widen
-  # this deliberately.
-  max_targets: 8
-  # Grant: 5,000 designs per target.
-  n_per_target: 5000
+  # Use one deterministic representative from every held-out test cluster.
+  # Selection fails if a chosen cluster occurs in train or validation. This
+  # keeps Figures 3-5 broad without allowing related training examples into the
+  # generation cohort. Smoke/small overlays retain explicit target caps.
+  target_selection:
+    strategy: "one_per_cluster"
+    cluster_column: "ab_ag_cluster"
+  max_targets: null
+  # Spread the generation budget across the broad target set.
+  n_per_target: 100
 
   # Sampling. Only heavy chains are ever generated -- that is the task.
   # SAbDab2's IMGT-numberable VH targets currently span up to 171 aa. Leave

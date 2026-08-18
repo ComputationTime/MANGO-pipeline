@@ -494,9 +494,10 @@ the whole sweep.
 **Which structures**: `generation.source` names a split — `test` (current) uses
 held-out dataset complexes, `target` uses the therapeutic panel of §5. Either
 source must supply both an antigen and a light chain, since that pair is the
-entire conditioning signal. `generation.max_targets` caps the count; selection
-is the first N ids in sorted order, so the subset is reproducible from the
-config alone.
+entire conditioning signal. For dataset splits, `generation.target_selection`
+selects one deterministic representative per held-out `ab_ag_cluster` and fails
+if a selected cluster occurs in train or validation. `generation.max_targets`
+can optionally cap that already-diversified cohort.
 
 Duplicates are **kept** — the repeat rate is itself signal about how sharply a
 representation constrains generation.

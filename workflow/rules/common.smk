@@ -8,7 +8,11 @@
 import hashlib
 import json
 import re
+import sys
 from pathlib import PurePosixPath
+
+sys.path.insert(0, "workflow/scripts")
+from generation_targets import select_generation_targets
 
 # --- Dataset locations -------------------------------------------------------
 _DS = config["dataset"]
@@ -356,17 +360,20 @@ if GENERATION_SPLIT not in set(EMBED_SPLITS):
 
 
 def generation_instances() -> list:
-    """Ids generation designs against, capped by generation.max_targets.
-
-    Sorted-then-truncated rather than sampled: the subset is reproducible from
-    the config alone and can be read straight off the records table.
-    """
+    """Leakage-safe, deterministic ids used by generation and Figures 3-5."""
     if GENERATION_SPLIT == TARGET_SPLIT:
         ids = sorted(TARGET_PDBS)
-    else:
-        ids = sorted(i for _, i in instances_by_split([GENERATION_SPLIT]))
-    limit = config["generation"].get("max_targets")
-    return ids[: int(limit)] if limit else ids
+        limit = config["generation"].get("max_targets")
+        return ids[: int(limit)] if limit else ids
+
+    selection = config["generation"].get("target_selection", {})
+    return select_generation_targets(
+        _records_df(), split=GENERATION_SPLIT,
+        strategy=selection.get("strategy", "one_per_cluster"),
+        cluster_column=selection.get(
+            "cluster_column", config["processing"]["val"]["cluster_column"]),
+        max_targets=config["generation"].get("max_targets"),
+    )
 
 
 def generation_antigen_emb(tag: str, instance: str) -> str:

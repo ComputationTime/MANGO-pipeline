@@ -232,8 +232,9 @@ The main settings are in `config/config.yaml`. In particular:
   `processing.val.fraction` is the fraction of training clusters held out.
 - `model.*` controls training and early stopping.
 - `model.predict_splits` controls held-out reconstruction.
-- `generation.max_targets` and `generation.n_per_target` bound de novo
-  generation.
+- `generation.target_selection` chooses one representative from every held-out
+  test cluster by default; `generation.max_targets` optionally caps that broad
+  cohort and `generation.n_per_target` bounds sampling per target.
 - `analysis.cohort.n_per_target` bounds the common sequence-scoring cohort.
 - `analysis.ab_likeness`, `analysis.germline`, and
   `analysis.developability` configure the independent metric modules.

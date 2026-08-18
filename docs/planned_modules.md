@@ -146,8 +146,9 @@ directory rather than silently overwriting a result.
 
 **What generation designs against** is `generation.source`, a split name:
 
-- `test` (current) — held-out complexes from the dataset itself. Nothing extra
-  to configure; `generation.max_targets` caps how many are used.
+- `test` (current) — one deterministic representative from every held-out
+  `ab_ag_cluster`. Selection fails if any chosen cluster occurs in train or
+  validation; `generation.max_targets` can optionally cap the diverse cohort.
 - `target` — the eight therapeutic complexes. Requires filling in
   `generation.targets[].antigen_chains` **and** `.light_chain` first;
   `standardize_targets` refuses to guess and fails with the chain ids, lengths,
