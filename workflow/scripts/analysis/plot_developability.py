@@ -1,38 +1,105 @@
-"""Plot handbook Figure 5: GRAVY and charge-at-pH distributions (TAP deferred)."""
+"""Plot all generated-chain biophysical properties as violin distributions."""
 
+import math
 import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import plot_common as pc
 
 
+METRICS = [
+    ("net_charge_pH7.4", "Net Charge pH7.4"),
+    ("instability_index", "Instability Index"),
+    ("isoelectric_point", "Isoelectric Point"),
+    ("gravy_hydrophobicity", "Gravy Hydrophobicity"),
+    ("aromaticity", "Aromaticity"),
+    ("aliphatic_index", "Aliphatic Index"),
+]
+
+
 def plot_developability(paths, embedders, labels, dpi, out_figure, out_data):
     data = pd.concat([pd.read_csv(path) for path in paths], ignore_index=True)
+    aliases = {
+        "gravy_hydrophobicity": "gravy",
+        "net_charge_pH7.4": "charge_at_pH",
+    }
+    for canonical, legacy in aliases.items():
+        if canonical not in data and legacy in data:
+            data[canonical] = pd.to_numeric(data[legacy], errors="coerce")
+    for column, _ in METRICS:
+        if column not in data:
+            data[column] = np.nan
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+    if "metric_status" not in data:
+        data["metric_status"] = "ok"
     valid = data.loc[data["metric_status"] == "ok"].copy()
+
+    sns.set_theme(style="whitegrid")
     cmap = pc.colors(embedders)
-    fig, axes = plt.subplots(1, 2, figsize=(9.0, 4.4))
-    panels = [("gravy", "GRAVY hydrophobicity", "GRAVY"),
-              ("charge_at_pH", "Charge at pH 7.4", "predicted net charge")]
-    for ax, (column, title, xlabel) in zip(axes, panels):
-        if valid.empty:
-            pc.empty_panel(ax, title, "No valid generated sequences",
-                           xlabel=xlabel, ylabel="density")
+    columns = 3
+    rows = math.ceil(len(METRICS) / columns)
+    fig, axes = plt.subplots(rows, columns, figsize=(6 * columns, 6 * rows))
+    axes = np.asarray(axes).reshape(-1)
+
+    for ax, (metric, display_name) in zip(axes, METRICS):
+        panel = valid.dropna(subset=[metric])
+        if panel.empty:
+            pc.empty_panel(
+                ax,
+                f"Distribution of {display_name}",
+                "No valid values",
+                xlabel="Embedder",
+                ylabel=display_name,
+            )
             continue
-        edges = pc.shared_edges(valid, column, bins=30)
-        for tag in embedders:
-            values = valid.loc[valid.embedder == tag, column].dropna()
-            ax.hist(values, bins=edges, density=True, histtype="step", linewidth=2,
-                    color=cmap[tag])
-        pc.style(ax, title, xlabel=xlabel, ylabel="density")
-    fig.suptitle("Developability properties of generated heavy chains", x=0.01, ha="left")
-    pc.add_legend(fig, embedders, labels, cmap)
-    columns = ["embedder", "run_id", "target_id", "design_index", "sequence",
-               "gravy", "charge_at_pH", "charge_ph", "metric_status"]
-    pc.save(fig, data[[c for c in columns if c in data]], out_figure, out_data, dpi)
+        sns.violinplot(
+            data=panel,
+            x="embedder",
+            y=metric,
+            order=embedders,
+            hue="embedder",
+            hue_order=embedders,
+            palette=cmap,
+            inner="quartile",
+            cut=0,
+            legend=False,
+            ax=ax,
+        )
+        ax.set_xticks(
+            range(len(embedders)),
+            [labels.get(tag, tag) for tag in embedders],
+            rotation=45,
+            ha="right",
+        )
+        pc.style(
+            ax,
+            f"Distribution of {display_name}",
+            xlabel="Embedder",
+            ylabel=display_name,
+        )
+
+    output_columns = [
+        "embedder",
+        "run_id",
+        "target_id",
+        "design_index",
+        "sequence",
+        *[metric for metric, _ in METRICS],
+        "metric_status",
+    ]
+    pc.save(
+        fig,
+        data[[column for column in output_columns if column in data]],
+        out_figure,
+        out_data,
+        dpi,
+    )
 
 
 def main():

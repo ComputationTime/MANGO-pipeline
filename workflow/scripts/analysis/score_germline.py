@@ -34,6 +34,46 @@ def _domain_sequence(numbered_domain):
     return "".join(aa for _, aa in numbering if aa != "-")
 
 
+def parse_heavy_germline_assignment(detail):
+    """Parse ANARCI's nested heavy-chain HMM and V/J germline assignments."""
+    if detail.get("chain_type") != "H":
+        raise ValueError(f"expected a heavy-chain domain, found {detail.get('chain_type')!r}")
+
+    genes = detail.get("germlines")
+    if not isinstance(genes, dict):
+        raise ValueError("ANARCI did not return germline assignments")
+
+    parsed = {}
+    assignment_species = {}
+    for segment in ("v", "j"):
+        value = genes.get(f"{segment}_gene")
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise ValueError(f"ANARCI returned a malformed {segment.upper()}-gene assignment")
+        assignment, identity = value
+        if not isinstance(assignment, (list, tuple)) or len(assignment) != 2:
+            raise ValueError(f"ANARCI returned a malformed {segment.upper()} germline")
+        species, gene = assignment
+        if not species or not gene or identity is None:
+            raise ValueError(f"ANARCI did not assign a complete {segment.upper()} germline")
+        assignment_species[segment] = str(species)
+        parsed[f"{segment}_gene"] = str(gene)
+        parsed[f"{segment}_identity"] = float(identity)
+
+    if assignment_species["v"] != assignment_species["j"]:
+        raise ValueError(
+            "V/J germline species disagree: "
+            f"{assignment_species['v']}/{assignment_species['j']}"
+        )
+
+    parsed.update(
+        anarci_chain_type="H",
+        # HMM species and nearest-germline species are distinct ANARCI outputs.
+        anarci_hmm_species=str(detail.get("species") or ""),
+        germline_species=assignment_species["v"],
+    )
+    return parsed
+
+
 def score_germline(cohort_csv, scheme, allowed_species, ncpu, out_csv):
     from anarci import anarci
     from anarci.germlines import all_germlines
@@ -49,7 +89,8 @@ def score_germline(cohort_csv, scheme, allowed_species, ncpu, out_csv):
     annotations = []
     for i, row in enumerate(df.itertuples(index=False)):
         result = {
-            "anarci_scheme": scheme, "germline_species": "", "v_gene": "",
+            "anarci_scheme": scheme, "anarci_chain_type": "",
+            "anarci_hmm_species": "", "germline_species": "", "v_gene": "",
             "v_identity": float("nan"), "j_gene": "", "j_identity": float("nan"),
             "numbered_heavy_sequence": "", "germline_reference_sequence": "",
             "ld_germline": float("nan"), "ld_germline_normalized": float("nan"),
@@ -65,23 +106,21 @@ def score_germline(cohort_csv, scheme, allowed_species, ncpu, out_csv):
             if not heavy_domains:
                 raise ValueError("ANARCI found no heavy-chain domain")
             domain, detail = heavy_domains[0]
-            genes = detail.get("germlines", {})
-            v_assignment, v_identity = genes.get("v_gene", (None, None))
-            j_assignment, j_identity = genes.get("j_gene", (None, None))
-            if not v_assignment or not j_assignment:
-                raise ValueError("ANARCI did not assign both V and J germlines")
-            species, v_gene = v_assignment
-            j_species, j_gene = j_assignment
-            if species != j_species:
-                raise ValueError(f"V/J germline species disagree: {species}/{j_species}")
+            result.update(
+                anarci_chain_type=str(detail.get("chain_type") or ""),
+                anarci_hmm_species=str(detail.get("species") or ""),
+            )
+            assignment = parse_heavy_germline_assignment(detail)
+            species = assignment["germline_species"]
+            v_gene = assignment["v_gene"]
+            j_gene = assignment["j_gene"]
 
             domain_sequence = _domain_sequence(domain)
             reference = germline_reference(all_germlines, species, v_gene, j_gene)
             distance = levenshtein(domain_sequence, reference)
             denominator = max(len(domain_sequence), len(reference))
             result.update(
-                germline_species=species, v_gene=v_gene, v_identity=float(v_identity),
-                j_gene=j_gene, j_identity=float(j_identity),
+                **assignment,
                 numbered_heavy_sequence=domain_sequence,
                 germline_reference_sequence=reference,
                 ld_germline=int(distance),

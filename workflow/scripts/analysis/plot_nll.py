@@ -32,18 +32,27 @@ def plot_nll(eval_jsons, embedders, labels, dpi, out_figure, out_data):
     fig, ax = plt.subplots(figsize=(max(6, 1.6 * len(embedders) + 2), 4.4))
     x = np.arange(len(embedders))
     width = 0.34
-    for offset, split, alpha in [(-width / 2, "train", 1.0),
-                                  (width / 2, "test", 0.48)]:
+    for offset, split, hatch, alpha in [
+        (-width / 2, "train", None, 1.0),
+        (width / 2, "test", "///", 0.55),
+    ]:
         values = [data.loc[(data.embedder == tag) & (data.split == split), "nll"].iloc[0]
                   for tag in embedders]
         bars = ax.bar(x + offset, values, width, color=[cmap[tag] for tag in embedders],
-                      alpha=alpha, edgecolor="white", linewidth=1.5, label=split)
+                      hatch=hatch, alpha=alpha, edgecolor=pc.TEXT,
+                      linewidth=0.8, label=split)
         if len(embedders) <= 4:
             pc.label_bars(ax, bars, values)
     ax.set_xticks(x, [labels.get(tag, tag) for tag in embedders], rotation=25, ha="right")
     pc.style(ax, "Antigen representation vs. heavy-chain likelihood",
-             ylabel="NLL (nats / predicted heavy-chain token)")
-    ax.legend(frameon=False, title="split")
+             ylabel="NLL")
+    ax.legend(
+        frameon=False,
+        title="split",
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1.0),
+        borderaxespad=0,
+    )
     pc.save(fig, data, out_figure, out_data, dpi)
 
 

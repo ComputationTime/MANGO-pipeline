@@ -1,4 +1,4 @@
-"""Compute handbook Figure 5 GRAVY and charge-at-pH metrics per design."""
+"""Compute sequence-level biophysical properties for each generated design."""
 
 from pathlib import Path
 
@@ -18,7 +18,28 @@ def score_sequence(sequence, charge_ph):
     if not clean:
         raise ValueError("sequence contains no canonical amino acids")
     analysis = ProteinAnalysis(clean)
-    return analysis.gravy(), analysis.charge_at_pH(float(charge_ph))
+    fractions = {
+        amino_acid: count / len(clean)
+        for amino_acid, count in analysis.count_amino_acids().items()
+    }
+    charge = analysis.charge_at_pH(float(charge_ph))
+    gravy = analysis.gravy()
+    return {
+        "isoelectric_point": analysis.isoelectric_point(),
+        "gravy_hydrophobicity": gravy,
+        "aromaticity": analysis.aromaticity(),
+        "aliphatic_index": 100.0 * (
+            fractions["A"]
+            + 2.9 * fractions["V"]
+            + 3.9 * (fractions["I"] + fractions["L"])
+        ),
+        "instability_index": analysis.instability_index(),
+        "net_charge_pH7.4": charge,
+        # Preserve the original pipeline column names for compatibility.
+        "gravy": gravy,
+        "charge_at_pH": charge,
+        "charge_ph": float(charge_ph),
+    }
 
 
 def score_biophysical(cohort_csv, charge_ph, out_csv):
@@ -27,13 +48,23 @@ def score_biophysical(cohort_csv, charge_ph, out_csv):
     for row in df.itertuples(index=False):
         base = row._asdict()
         try:
-            gravy, charge = score_sequence(row.sequence, charge_ph)
-            base.update(gravy=gravy, charge_at_pH=charge, charge_ph=float(charge_ph),
-                        metric_status="ok")
+            base.update(score_sequence(row.sequence, charge_ph))
+            base["metric_status"] = "ok"
         except Exception as exc:
-            base.update(gravy=float("nan"), charge_at_pH=float("nan"),
-                        charge_ph=float(charge_ph),
-                        metric_status=f"error: {type(exc).__name__}: {exc}")
+            base.update(
+                {
+                    "isoelectric_point": float("nan"),
+                    "gravy_hydrophobicity": float("nan"),
+                    "aromaticity": float("nan"),
+                    "aliphatic_index": float("nan"),
+                    "instability_index": float("nan"),
+                    "net_charge_pH7.4": float("nan"),
+                    "gravy": float("nan"),
+                    "charge_at_pH": float("nan"),
+                    "charge_ph": float(charge_ph),
+                    "metric_status": f"error: {type(exc).__name__}: {exc}",
+                }
+            )
         rows.append(base)
     out = pd.DataFrame(rows)
     Path(out_csv).parent.mkdir(parents=True, exist_ok=True)

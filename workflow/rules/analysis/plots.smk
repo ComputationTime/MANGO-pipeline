@@ -84,6 +84,24 @@ rule plot_fig4_germline:
         "../../scripts/analysis/plot_germline.py"
 
 
+rule plot_fig6_gene_families:
+    input:
+        metrics=[analysis_metric_csv(tag, "germline") for tag in ANALYSIS_EMBEDDERS],
+    output:
+        figure=figure_path("fig6_gene_families"),
+        data=figure_data_path("fig6_gene_families"),
+    params:
+        embedders=ANALYSIS_EMBEDDERS,
+        labels=_PLOT_LABELS,
+        dpi=_DPI,
+    log:
+        f"{LOG_DIR}/plot_fig6_gene_families.log",
+    conda:
+        "../../envs/analysis_plot.yaml"
+    script:
+        "../../scripts/analysis/plot_genes.py"
+
+
 rule plot_fig5_developability:
     input:
         metrics=[analysis_metric_csv(tag, "biophysical") for tag in ANALYSIS_EMBEDDERS],
