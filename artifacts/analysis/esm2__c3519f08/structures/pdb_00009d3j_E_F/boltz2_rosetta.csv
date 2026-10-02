@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+esm2,esm2__c3519f08,pdb_00009d3j_E_F,1,IEEPIQEATQEFVGIGQQQEWDQFAFISPS,boltz2,0,artifacts/analysis/esm2__c3519f08/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,HL_AG1,ref2015,25.13673153576319,1709.7181046849792,1.4702266687638958,17.0,2.0,57.0,ok

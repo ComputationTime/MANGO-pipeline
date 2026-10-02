@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+one_hot,one_hot__3e3ad76d,pdb_00009d3j_E_F,1,VWEPILEATQEFVGIGQQQEWIQFAGISPS,chai,0,0.34391191601753235,0.6850725412368774,0.2586217522621155,0.8212105631828308,9.936108589172363,False,artifacts/analysis/one_hot__3e3ad76d/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,ok

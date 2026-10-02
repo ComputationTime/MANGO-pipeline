@@ -1,0 +1,1 @@
+{"epoch": 0, "iteration": 3, "train_loss": 3.2179219722747803, "val_loss": 3.048386812210083, "train_order_seed": 0, "train_shuffled": true, "embedder": "one_hot", "run_id": "one_hot__69e7cb3b", "improved": true}

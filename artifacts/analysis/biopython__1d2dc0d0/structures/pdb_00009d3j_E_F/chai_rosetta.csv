@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+biopython,biopython__1d2dc0d0,pdb_00009d3j_E_F,1,VWEPILESTQEFKGIGQQQEWIQFAGISPS,chai,0,artifacts/analysis/biopython__1d2dc0d0/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,AB_C,ref2015,263.89450946635066,2113.0042295139983,12.489066788429842,16.0,2.0,80.0,ok

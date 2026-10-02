@@ -1,0 +1,82 @@
+{
+  "checkpoint_epoch": 4,
+  "checkpoint_val_loss": 0.9709753284298417,
+  "cohort_sha256": "03468885503101c7749ab53956c0586585e87772a6b33367d2f73ff88eec6b6f",
+  "d_ag": 480,
+  "embedder": "esm2_35m",
+  "experiment_hash": "79892e3e",
+  "loss_reduction": "target_token_mean_including_eos",
+  "run_id": "esm2_35m__79892e3e",
+  "splits": {
+    "test": {
+      "by_chain": {
+        "heavy": {
+          "n_examples": 426,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 52077,
+          "nll": 1.034800515554833,
+          "perplexity": 2.8145447217270703
+        },
+        "light": {
+          "n_examples": 426,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 46607,
+          "nll": 0.835084461325546,
+          "perplexity": 2.3050087241578434
+        }
+      },
+      "n_examples": 852,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 98684,
+      "nll": 0.9404775641192975,
+      "perplexity": 2.561204265571476
+    },
+    "train": {
+      "by_chain": {
+        "heavy": {
+          "n_examples": 2636,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 320058,
+          "nll": 0.4135582707275743,
+          "perplexity": 1.512189001182656
+        },
+        "light": {
+          "n_examples": 2636,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 290258,
+          "nll": 0.2632079075602805,
+          "perplexity": 1.3010971987776352
+        }
+      },
+      "n_examples": 5272,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 610316,
+      "nll": 0.3420536801348119,
+      "perplexity": 1.407835868304963
+    },
+    "val": {
+      "by_chain": {
+        "heavy": {
+          "n_examples": 132,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 16050,
+          "nll": 1.007358318013937,
+          "perplexity": 2.738357581910355
+        },
+        "light": {
+          "n_examples": 132,
+          "n_skipped_missing_embeddings": 0,
+          "n_tokens": 14347,
+          "nll": 0.93027364983329,
+          "perplexity": 2.535202840537824
+        }
+      },
+      "n_examples": 264,
+      "n_skipped_missing_embeddings": 0,
+      "n_tokens": 30397,
+      "nll": 0.9709753284298417,
+      "perplexity": 2.6405185766825543
+    }
+  },
+  "task": "antigen+chain_type->chain"
+}

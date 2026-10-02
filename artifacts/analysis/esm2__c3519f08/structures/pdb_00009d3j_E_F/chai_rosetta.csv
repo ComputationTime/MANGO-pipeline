@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+esm2,esm2__c3519f08,pdb_00009d3j_E_F,1,IEEPIQEATQEFVGIGQQQEWDQFAFISPS,chai,0,artifacts/analysis/esm2__c3519f08/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,AB_C,ref2015,179.0374507531361,1994.1565615767295,8.978104036704906,10.0,2.0,72.0,ok

@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+biopython,biopython__1d2dc0d0,pdb_00009d3j_E_F,1,VWEPILESTQEFKGIGQQQEWIQFAGISPS,boltz2,0,0.7655380964279175,0.7958519458770752,0.5596343874931335,0.8170139789581299,8.391849517822266,,artifacts/analysis/biopython__1d2dc0d0/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,ok

@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+one_hot,one_hot__3e3ad76d,pdb_00009d3j_E_F,1,VWEPILEATQEFVGIGQQQEWIQFAGISPS,chai,0,artifacts/analysis/one_hot__3e3ad76d/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,AB_C,ref2015,782.2828979092462,2366.29699113719,33.05937085831725,13.0,1.0,88.0,ok

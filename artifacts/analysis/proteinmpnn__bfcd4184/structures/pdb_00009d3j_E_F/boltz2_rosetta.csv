@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+proteinmpnn,proteinmpnn__bfcd4184,pdb_00009d3j_E_F,1,VWEPIQEATQEFVGIGQQQEWDQFAGISPG,boltz2,0,artifacts/analysis/proteinmpnn__bfcd4184/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,HL_AG1,ref2015,86.62162857211436,1195.1368402842606,7.247841891603945,7.0,3.0,46.0,ok

@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+pyrosetta_pre,pyrosetta_pre__f53020ee,pdb_00009d3j_E_F,1,VWEPILESTQEFVGIGQQQEWDQFAGISPS,chai,0,artifacts/analysis/pyrosetta_pre__f53020ee/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,AB_C,ref2015,1013.861520572093,2584.964220029202,39.22149145107469,22.0,3.0,92.0,ok

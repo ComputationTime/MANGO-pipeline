@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+proteinmpnn,proteinmpnn__bfcd4184,pdb_00009d3j_E_F,1,VWEPIQEATQEFVGIGQQQEWDQFAGISPG,boltz2,0,0.8112597465515137,0.8800890445709229,0.7711080312728882,0.8212976455688477,5.029489517211914,,artifacts/analysis/proteinmpnn__bfcd4184/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,ok

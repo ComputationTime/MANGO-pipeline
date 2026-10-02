@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+pyrosetta_pre,pyrosetta_pre__f53020ee,pdb_00009d3j_E_F,1,VWEPILESTQEFVGIGQQQEWDQFAGISPS,boltz2,0,0.7506516575813293,0.812684178352356,0.5956092476844788,0.789412260055542,7.431849956512451,,artifacts/analysis/pyrosetta_pre__f53020ee/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,ok

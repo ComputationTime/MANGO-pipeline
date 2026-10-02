@@ -1,0 +1,12 @@
+{
+  "compute_capability": "8.9",
+  "cuda_visible_devices": null,
+  "driver_version": "615.71.09",
+  "gpu_memory_gb": 11.65,
+  "gpu_name": "NVIDIA GeForce RTX 4070",
+  "hostname": "PaulSt",
+  "kernel_checksum": -0.054963596165180206,
+  "status": "ok",
+  "torch_cuda_version": "12.8",
+  "torch_version": "2.8.0+cu128"
+}

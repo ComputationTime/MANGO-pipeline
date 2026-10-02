@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+proteinmpnn,proteinmpnn__bfcd4184,pdb_00009d3j_E_F,1,VWEPIQEATQEFVGIGQQQEWDQFAGISPG,chai,0,0.4056718349456787,0.702306866645813,0.33151304721832275,0.8285033106803894,9.384970664978027,False,artifacts/analysis/proteinmpnn__bfcd4184/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,ok

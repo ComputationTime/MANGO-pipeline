@@ -1,0 +1,17 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "architecture": "antigen_prefix_gpt2_v1",
+  "d_ag": 21,
+  "d_model": 480,
+  "decoder_trainable_parameters": 12080640,
+  "embedder": "one_hot",
+  "experiment_hash": "69e7cb3b",
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "projection_trainable_parameters": 10560,
+  "run_id": "one_hot__69e7cb3b",
+  "task": "antigen+light->heavy",
+  "trainable_parameters": 12091200,
+  "vocab_size": 26
+}

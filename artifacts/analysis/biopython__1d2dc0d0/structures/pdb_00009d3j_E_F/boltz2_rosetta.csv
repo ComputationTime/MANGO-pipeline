@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+biopython,biopython__1d2dc0d0,pdb_00009d3j_E_F,1,VWEPILESTQEFKGIGQQQEWIQFAGISPS,boltz2,0,artifacts/analysis/biopython__1d2dc0d0/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,HL_AG1,ref2015,132.82016590303533,1327.2414319292236,10.007234758334315,10.0,1.0,52.0,ok
