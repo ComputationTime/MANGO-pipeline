@@ -23,7 +23,7 @@ def main():
         }
     result = {
         "status": "complete",
-        "task": "antigen+light->heavy",
+        "task": "antigen+chain_type->chain",
         "embedders": embedders,
         "preflight": str(smk.input.preflight),
         "runs": runs,

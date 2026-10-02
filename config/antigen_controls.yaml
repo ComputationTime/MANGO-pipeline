@@ -1,0 +1,71 @@
+# Negative controls trained on the same SAbDab2 cohort and with the same MANGO
+# decoder/training configuration as the ESM2 650M run. Constant and random use
+# one 1280-wide token, so neither antigen sequence nor antigen length enters the
+# model. Shuffled uses real ESM2 650M tensors assigned to a different record in
+# the same split, preserving ESM2 widths and length distribution but breaking
+# the biological pairing.
+execution:
+  min_gpu_memory_gb: 10
+
+embedders:
+  control_constant:
+    method: antigen_control
+    class: control
+    label: "Constant (no antigen)"
+    mode: constant
+    width: 1280
+    tokens: 1
+    seed: 0
+    conditioning_scope: no_antigen_fixed_token_v1
+
+  control_random:
+    method: antigen_control
+    class: control
+    label: "Random (no antigen)"
+    mode: random
+    width: 1280
+    tokens: 1
+    seed: 0
+    conditioning_scope: no_antigen_fixed_token_v1
+    randomization_scope: record_id
+
+  control_shuffled:
+    method: antigen_shuffled
+    class: control
+    label: "Shuffled ESM2"
+    source_embedder: esm2
+    source_dir: "artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
+    source_eval_json: "artifacts/runs/esm2__c49369e9/eval.json"
+    seed: 0
+    conditioning_scope: shuffled_antigen_within_split_v1
+
+  control_pooled_esm2:
+    method: antigen_pooled
+    class: control
+    label: "Mean-pooled ESM2"
+    source_embedder: esm2
+    source_dir: "artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
+    source_eval_json: "artifacts/runs/esm2__c49369e9/eval.json"
+    pooling: mean_over_antigen_tokens_v1
+    output_tokens: 1
+    conditioning_scope: correct_antigen_mean_pooled_v1
+
+active_embedders:
+  - control_constant
+  - control_random
+  - control_shuffled
+  - control_pooled_esm2
+
+model:
+  retrain: true
+
+analysis:
+  antigen_controls:
+    embedders:
+      - control_constant
+      - control_random
+      - control_pooled_esm2
+      - control_shuffled
+      - esm2
+    reuse_tag: esm2
+    reuse_eval_json: "artifacts/runs/esm2__c49369e9/eval.json"

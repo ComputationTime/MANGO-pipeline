@@ -50,21 +50,7 @@ def structure_path(instance: str) -> str:
 # --- Embedder registry -------------------------------------------------------
 EMBEDDERS = config["embedders"]
 ACTIVE_EMBEDDERS = list(config["active_embedders"])
-ANTIBODY_METHOD = config["embedding"]["antibody"]["method"]
 BATCH_EMBEDDINGS = bool(config.get("execution", {}).get("batch_embeddings", False))
-
-# The task is: antigen + light chain -> heavy chain. The antibody context
-# embedding therefore covers the LIGHT chain only (heavy slot masked). The
-# context is part of the directory name so a change of task can never silently
-# reuse embeddings built under the old one.
-ANTIBODY_CONTEXT = config["embedding"]["antibody"].get("context", "light_only")
-if ANTIBODY_CONTEXT != "light_only":
-    raise ValueError(
-        f"embedding.antibody.context is {ANTIBODY_CONTEXT!r}; only 'light_only' "
-        "is supported -- the study predicts the heavy chain from the antigen and "
-        "the light chain, so the heavy chain must never enter the context."
-    )
-ANTIBODY_DIR = f"{ANTIBODY_METHOD}_{ANTIBODY_CONTEXT}"
 
 SEQ_SOURCE = config["embedding"]["seq_source"]
 EMBED_SPLITS = list(config["embedding"]["splits"])
@@ -123,24 +109,8 @@ def antigen_emb_path(tag: str, split: str, instance: str) -> str:
     return f"{antigen_emb_dir(tag)}/{split}/{instance}.pt"
 
 
-def antibody_emb_dir() -> str:
-    return f"{EMB_DIR}/antibody/{ANTIBODY_DIR}"
-
-
-def antibody_emb_config() -> str:
-    return f"{antibody_emb_dir()}/embedder_config.json"
-
-
-def antibody_emb_path(split: str, instance: str) -> str:
-    return f"{antibody_emb_dir()}/{split}/{instance}.pt"
-
-
 def antigen_batch_marker(tag: str) -> str:
     return f"{antigen_emb_dir(tag)}/.batch_complete.json"
-
-
-def antibody_batch_marker() -> str:
-    return f"{antibody_emb_dir()}/.batch_complete.json"
 
 
 def pretrained_weight_marker(tag: str) -> str:
@@ -170,22 +140,11 @@ def antigen_embedding_targets(tag: str, splits=None) -> list:
     return [antigen_emb_path(tag, s, i) for s, i in instances_by_split(splits)]
 
 
-def antibody_embedding_targets(splits=None) -> list:
-    splits = EMBED_SPLITS if splits is None else splits
-    return [antibody_emb_path(s, i) for s, i in instances_by_split(splits)]
-
-
 def antigen_embedding_dependencies(tag: str, splits=None) -> list:
     """Declared readiness inputs; GPU mode uses a persistent-model batch marker."""
     if BATCH_EMBEDDINGS:
         return [antigen_batch_marker(tag)]
     return antigen_embedding_targets(tag, splits)
-
-
-def antibody_embedding_dependencies(splits=None) -> list:
-    if BATCH_EMBEDDINGS:
-        return [antibody_batch_marker()]
-    return antibody_embedding_targets(splits)
 
 
 # --- Runs (one trained model per embedder tag) -------------------------------
@@ -370,9 +329,8 @@ def records_for_split(split: str) -> str:
 
 # --- Aim 2 generation source -------------------------------------------------
 # Which structures generation designs against. `test` uses held-out dataset
-# complexes; `target` uses the therapeutic panel above. Either way the source
-# must supply an antigen AND a light chain, because that pair is the entire
-# conditioning signal for heavy-chain generation.
+# complexes; `target` uses the therapeutic panel above. The antigen embedding is
+# the only biological conditioning input.
 GENERATION_SPLIT = config["generation"]["source"]
 
 if GENERATION_SPLIT not in set(EMBED_SPLITS):
@@ -402,10 +360,6 @@ def generation_instances() -> list:
 
 def generation_antigen_emb(tag: str, instance: str) -> str:
     return antigen_emb_path(tag, GENERATION_SPLIT, instance)
-
-
-def generation_antibody_emb(instance: str) -> str:
-    return antibody_emb_path(GENERATION_SPLIT, instance)
 
 
 def generation_structure(instance: str) -> str:

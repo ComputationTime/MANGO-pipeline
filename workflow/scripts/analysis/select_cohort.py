@@ -21,6 +21,11 @@ def select_cohort(design_csvs, records_csv, tag, n_per_target, seed, out_csv):
 
     for path in design_csvs:
         df = pd.read_csv(path, dtype={"sequence": str}, keep_default_na=False)
+        # Historical generation CSVs predate the explicit chain_type column and
+        # are heavy-only. New outputs identify the chain and must not leak light
+        # designs into analyses whose structure/scoring contract is heavy-only.
+        if "chain_type" in df and not df["chain_type"].str.lower().eq("heavy").all():
+            raise ValueError(f"{path} must contain heavy-chain designs only")
         missing = REQUIRED - set(df.columns)
         if missing:
             raise ValueError(f"{path} is missing cohort columns: {sorted(missing)}")
@@ -48,7 +53,10 @@ def select_cohort(design_csvs, records_csv, tag, n_per_target, seed, out_csv):
     cohort["light_sequence"] = cohort["target_id"].map(light_by_id).fillna("")
     if (cohort["light_sequence"] == "").any():
         targets = sorted(cohort.loc[cohort["light_sequence"] == "", "target_id"].unique())
-        raise ValueError(f"missing light-chain context for cohort target(s): {targets}")
+        raise ValueError(
+            "missing reference light chain required by downstream paired scoring "
+            f"for cohort target(s): {targets}"
+        )
     cohort["cohort_seed"] = int(seed)
     cohort["cohort_rank"] = cohort.groupby("target_id").cumcount()
     cohort = cohort.sort_values(["target_id", "cohort_rank"]).reset_index(drop=True)

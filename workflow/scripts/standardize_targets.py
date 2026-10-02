@@ -3,12 +3,10 @@
 Emits the same columns process_records.py produces, with split="target", so the
 antigen embedder rules can consume these structures unchanged.
 
-The model conditions on the antigen AND the light chain, so both must be named:
-`antigen_chains` and `light_chain` per target. Neither can be guessed safely --
-picking the wrong chain would silently condition every design on the Fab, or on
-the heavy chain we are meant to be predicting -- so a null value for either is a
-hard error that prints the chains actually present in the file, with per-chain
-length and sequence, for you to copy into config/config.yaml.
+Only `antigen_chains` is required for MANGO generation. An optional
+`light_chain` may be retained as a downstream complex-scoring partner, but it is
+never embedded or supplied to MANGO. Missing antigen-chain annotations are a
+hard error that lists the chains present in the structure.
 """
 
 import sys
@@ -62,28 +60,23 @@ def standardize_targets(targets, structures_dir: str, split: str, out_csv: str):
 
         chains_cfg = entry.get("antigen_chains")
         light_cfg = entry.get("light_chain")
-        unset = [
-            name
-            for name, value in (("antigen_chains", chains_cfg), ("light_chain", light_cfg))
-            if not value
-        ]
-        if unset:
+        if not chains_cfg:
             problems.append(
-                f"  {pdb}: {' and '.join(unset)} not set\n"
+                f"  {pdb}: antigen_chains not set\n"
                 + _describe(pdb, cif_path, found)
             )
             continue
 
         chains = [c.strip() for c in str(chains_cfg).split(SEP) if c.strip()]
-        light = str(light_cfg).strip()
-        missing = [c for c in chains + [light] if c not in found]
+        light = str(light_cfg or "").strip()
+        missing = [c for c in chains + ([light] if light else []) if c not in found]
         if missing:
             problems.append(
                 f"  {pdb}: configured chain(s) {missing} not in structure\n"
                 + _describe(pdb, cif_path, found)
             )
             continue
-        if light in chains:
+        if light and light in chains:
             problems.append(
                 f"  {pdb}: light_chain {light!r} is also listed as an antigen "
                 "chain; they must be different chains\n"
@@ -96,16 +89,13 @@ def standardize_targets(targets, structures_dir: str, split: str, out_csv: str):
                 "id": pdb,
                 "pdb_path": cif_path,
                 "antigen_chains": SEP.join(chains),
-                # Light first, matching records.csv's heavy,light,antigen order
-                # minus the heavy chain -- which is what we are predicting.
-                "chains": SEP.join([light] + chains),
+                "chains": SEP.join(([light] if light else []) + chains),
                 "expected_heavy_seq": "",
                 "expected_light_seq": "",
                 "expected_ag_seq": "",
-                # No heavy chain by design: it is the prediction target, and
-                # nothing downstream may condition on it.
+                # Target sequences are absent for external generation records.
                 "resolved_H_seq": "",
-                "resolved_L_seq": found[light],
+                "resolved_L_seq": found[light] if light else "",
                 "resolved_ag_seq": SEP.join(found[c] for c in chains),
                 "split": split,
                 "antibody_name": entry.get("antibody", ""),
@@ -115,12 +105,11 @@ def standardize_targets(targets, structures_dir: str, split: str, out_csv: str):
 
     if problems:
         raise ValueError(
-            "generation.targets needs antigen_chains and light_chain filled in "
+            "generation.targets needs antigen_chains filled in "
             f"for {len(problems)} target(s) in config/config.yaml.\n"
-            "antigen_chains are the ANTIGEN chains, not the Fab heavy/light "
-            "chains; light_chain is the Fab LIGHT chain. The model conditions on "
-            "both, so naming the wrong chain -- or the heavy chain, which is the "
-            "prediction target -- would invalidate every design.\n\n"
+            "antigen_chains must identify only the antigen. Optional light_chain "
+            "metadata is reserved for downstream complex scoring and is never a "
+            "MANGO input.\n\n"
             + "\n\n".join(problems)
         )
 

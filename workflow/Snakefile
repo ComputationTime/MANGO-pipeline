@@ -3,10 +3,10 @@
 # =============================================================================
 # "How does the choice of antigen representation affect de novo generation?"
 #
-# THE TASK, everywhere in this pipeline: given the ANTIGEN and the LIGHT chain,
-# predict the HEAVY chain. Training, evaluation, reconstruction and de novo
-# generation all condition on that same pair, and the heavy chain is never an
-# input -- the antibody context embedding is built with the heavy slot masked.
+# THE TASK, everywhere in this pipeline: given the ANTIGEN and a requested chain
+# type, generate that antibody chain. Antibody sequences are decoder targets or
+# downstream evaluation partners only; no antibody sequence or embedding enters
+# the MANGO conditioning prefix.
 #
 # The pipeline trains one model per antigen representation, identical in every
 # other respect, then compares them. Modules are separate .smk files so each
@@ -15,7 +15,7 @@
 #   fetch        download + stage the raw dataset
 #   standardize  raw -> one dataset-agnostic table   (swap datasets here)
 #   process      filter, resolve sequences, assign train/val/test  [checkpoint]
-#   embed        active antigen representation + constant antibody context
+#   embed        active antigen representations
 #   model        train / evaluate / predict / generate, one run per embedder
 #
 # The repository default activates only the one-hot antigen baseline. The

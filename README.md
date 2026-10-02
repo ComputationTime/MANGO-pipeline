@@ -3,12 +3,12 @@
 MANGO is a Snakemake workflow for training an antigen-conditioned antibody
 language model. Its single task is:
 
-> Given an antigen and a light chain, generate the heavy chain.
+> Given an antigen and a requested chain type, generate that antibody chain.
 
-The heavy chain is never part of the conditioning input. The antibody context
-embedding is produced by AbLang2 from `*|L`, where the heavy-chain slot is
-masked. Training, evaluation, held-out reconstruction, and de novo generation
-all use that same input contract.
+No antibody sequence or antibody-derived embedding is supplied as conditioning.
+Training, evaluation, held-out reconstruction, and de novo generation all use
+the same antigen-only biological input plus a learned heavy/light output
+selector. Heavy-chain generation remains the downstream-analysis default.
 
 The Snakemake workflow is the canonical interface. The older
 `mango/MANGORunner.py` API is legacy code and is not the supported execution
@@ -29,16 +29,14 @@ fetch → standardize → process → embed → train → evaluate
 
 - `process` creates a validation set by holding out complete
   `ab_ag_cluster` groups. Row-wise random validation is deliberately rejected.
-- `embed` builds the selected antigen embeddings and masked-heavy/light-chain
-  AbLang2 context embeddings. AbLang2 weights are downloaded once to
-  `artifacts/weights/ABLANG-ablang2-paired`, never by individual embed jobs.
-- `train` optimizes only heavy-chain tokens.
-- `evaluate` reports heavy-chain NLL and perplexity on train, validation, and
-  test splits.
-- `predict` generates one heavy-chain reconstruction for every configured
-  held-out record.
-- `generate` produces the configured number of de novo heavy chains for a
-  bounded set of held-out records.
+- `embed` builds only the selected antigen representations. AbLang2 remains an
+  independent generated-sequence scorer, not a MANGO input embedder.
+- `train` treats each configured heavy or light target as a separate example.
+- `evaluate` reports token-weighted NLL and perplexity overall and by chain type.
+- `predict` reconstructs the chain selected by `generation.chain` for every
+  configured held-out record.
+- `generate` produces the configured number of de novo selected chains for a
+  bounded set of held-out records; downstream design analysis requires heavy.
 - `analysis` is explicit and produces handbook Figures 1 through 5. Figure 2
   runs Boltz-2 and Chai-1 on a bounded, cluster-diverse generated subset. TAP
   remains deferred.
@@ -135,7 +133,7 @@ study embeddings before launching the full filtered SAbDab2 study:
 The launcher creates its own pinned Snakemake driver, checks CUDA with a real
 matrix multiplication, creates isolated CUDA environments, downloads and
 verifies all active embedder weights, downloads/reuses SAbDab2, embeds, trains one model per representation,
-evaluates, reconstructs held-out heavy chains, generates the configured design
+evaluates, reconstructs the configured held-out chain, generates the design
 cohort, and writes Figures 1, 3, 4, and 5. GPU jobs request a single shared
 `gpu=1` resource, so the representations run sequentially. In GPU mode each
 embedder is one restartable batch and loads its pretrained model once rather
@@ -187,8 +185,10 @@ five diffusion samples per design, run:
   --configfile config/gpu.yaml config/structure.yaml structure_confidence
 ```
 
-This folds the configured deterministic design subset as heavy + cognate light +
-antigen complexes, writes normalized confidence tables, and renders Figure 2.
+This folds the configured deterministic heavy-design subset with the recorded
+reference light chain and antigen, writes normalized confidence tables, and
+renders Figure 2. The reference partner is used only by this downstream quality-
+control analysis; it is never a MANGO conditioning input.
 AF3 is deferred to cluster-side execution and later ingestion through the same
 table contract. Boltz and Chai use single-sequence mode unless
 `structure_prediction.use_msa_server` is explicitly enabled.
@@ -273,7 +273,10 @@ The main settings are in `config/config.yaml`. In particular:
 - `processing.val.cluster_column` identifies the leakage boundary;
   `processing.val.fraction` is the fraction of training clusters held out.
 - `model.*` controls training and early stopping.
+- `model.target_chains` controls which chain targets are learned; neither target
+  sequence is used as conditioning.
 - `model.predict_splits` controls held-out reconstruction.
+- `generation.chain` selects heavy or light output; heavy is the analysis default.
 - `generation.target_selection` chooses one representative from every held-out
   test cluster by default; `generation.max_targets` optionally caps that broad
   cohort and `generation.n_per_target` bounds sampling per target.
@@ -320,3 +323,24 @@ independently rather than as a joint multichain complex.
 
 The implemented Boltz/Chai contract and intended AF3 ingestion are documented in
 `docs/structure_prediction_plan.md`.
+
+## Antigen-only model contract
+
+The supported architecture is `antigen_chain_gpt2_v3`. Its prefix contains the
+projected antigen representation, one learned heavy/light output selector, and
+the beginning-of-sequence token. A causal GPT-2 decoder then emits the requested
+chain. Only target residues and EOS receive loss; no antibody sequence,
+antibody embedding, species label, or cross-attention context is accepted.
+
+Changing from an older conditioning contract requires fresh training. The
+architecture participates in run identity, and checkpoint loading rejects older
+models. For standalone inference, `generate_designs.py` requires a compatible
+checkpoint, one antigen embedding, and a chain choice:
+
+```bash
+python workflow/scripts/generate_designs.py \
+  --ckpt artifacts/runs/NEW_RUN/checkpoints/best.pt \
+  --antigen-emb artifacts/path/to/antigen.pt \
+  --chain heavy --out artifacts/heavy_designs.csv \
+  --gen-cfg '{"n_per_target": 10, "batch_size": 1, "max_new_tokens": 180}'
+```

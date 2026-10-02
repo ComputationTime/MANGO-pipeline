@@ -1,0 +1,14 @@
+# Local RTX 4070 validation profile. Keep cloud defaults in gpu.yaml.
+# Actual CUDA kernels are still checked; OOM failures remain explicit.
+execution:
+  min_gpu_memory_gb: 10
+
+generation:
+  # Validated with 1000 antigen positions and ESM3-width inputs on this GPU.
+  batch_size: 8
+
+analysis:
+  ab_likeness:
+    antiberty:
+      # Matches batch-1 scores in the 180-residue check; 174 MiB allocated peak.
+      batch_size: 16

@@ -34,7 +34,7 @@ REQUIRED_SRC = {
     "INSTANCE": "id",
     "agchains": "antigen_chains",
     "VH_numerable_seq": "expected_heavy_seq",
-    "Lseq_expected": "expected_light_seq",
+    "VL_numerable_seq": "expected_light_seq",
     "agexpectedseqs": "expected_ag_seq",
 }
 
@@ -47,7 +47,9 @@ PASSTHROUGH_SRC = {
     "VH_numerable_seq": "resolved_H_seq",
     "Hseq": "source_resolved_full_heavy_seq",
     "Hseq_expected": "source_expected_full_heavy_seq",
-    "Lseq": "resolved_L_seq",
+    "VL_numerable_seq": "resolved_L_seq",
+    "Lseq": "source_resolved_full_light_seq",
+    "Lseq_expected": "source_expected_full_light_seq",
     "agresolvedseqs": "resolved_ag_seq",
     "type": "ab_type",
     "resolution": "resolution",
@@ -101,6 +103,7 @@ def standardize(
     for col in LIST_COLUMNS & set(out.columns):
         out[col] = _resep(out[col])
 
+    out["target_contract"] = "imgt_variable_vh_vl_v1"
     out = sc.order_columns(sc.validate(out, where=out_csv))
 
     Path(out_csv).parent.mkdir(parents=True, exist_ok=True)

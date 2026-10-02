@@ -30,7 +30,7 @@ class StructureConfidenceTests(unittest.TestCase):
             self.assertEqual(list(a.design_index), list(b.design_index))
             self.assertEqual(len(a), 3)
 
-    def test_target_context_uses_light_and_all_antigen_chains(self):
+    def test_downstream_complex_uses_reference_partner_and_all_antigen_chains(self):
         with tempfile.TemporaryDirectory() as tmp:
             records = Path(tmp) / "records.csv"
             pd.DataFrame([{

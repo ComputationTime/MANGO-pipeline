@@ -1,0 +1,1 @@
+embedder,run_id,target_id,split,design_index,chain_type,sequence,length,status,selection_key,light_sequence,cohort_seed,cohort_rank,anarci_scheme,germline_species,v_gene,v_identity,j_gene,j_identity,numbered_heavy_sequence,germline_reference_sequence,ld_germline,ld_germline_normalized,germline_status,v_family,j_family

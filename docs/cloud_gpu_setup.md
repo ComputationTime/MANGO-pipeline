@@ -65,6 +65,8 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 |---|---|---|
 | `smoke` / `small` | one-hot, BioPython, ESM2, ESM-IF, ProteinMPNN; Rosetta interface QC after Boltz/Chai | PyRosetta academic/non-commercial eligibility |
 | `study` | all seven implemented embedders, including ESM3 and PyRosetta PRE; Rosetta interface QC | accepted ESM3 terms, `HF_TOKEN`, and PyRosetta eligibility |
+| `esm2-ablation` | ESM2 8M, 35M, and 150M plus the existing 650M evaluation | completed full-study `esm2` 650M `eval.json` |
+| `antigen-controls` | constant-token, record-random-token, mean-pooled ESM2, and within-split shuffled-ESM2 controls | completed ESM2 650M embeddings and `eval.json` |
 | `*-esm3` | default set plus ESM3 | accept model terms and set `HF_TOKEN` |
 | `*-pyrosetta` | default set plus PyRosetta PRE | academic/non-commercial eligibility |
 | `*-all` | every implemented embedder above | both requirements |
@@ -146,6 +148,35 @@ Only after it finishes, launch the full filtered SAbDab2 study:
 ```bash
 ./run_gpu.sh study
 ```
+
+After the full 650M ESM2 evaluation exists, the focused size ablation reuses
+that result and trains/evaluates only the three smaller frozen embedders:
+
+```bash
+./run_gpu.sh esm2-ablation
+```
+
+It writes `fig7_esm2_size_ablation.{png,csv}` under
+`artifacts/analysis/figures/` and refuses to retrain the 650M control if its
+expected evaluation artifact is absent.
+
+Train and evaluate the antigen-conditioning controls with the same cohort and
+MANGO hyperparameters as ESM2 650M:
+
+```bash
+./run_gpu.sh antigen-controls
+```
+
+The constant control uses one all-zero token for every record. The random
+control uses one deterministic Gaussian token keyed only by record id and seed.
+Neither representation reads antigen sequence, structure, or length. The
+mean-pooled ESM2 control averages each correctly paired frozen ESM2 tensor to
+one token, isolating antigen information from the long-prefix burden. The
+shuffled control assigns every record a different record's frozen ESM2 650M
+tensor using a fixed-point-free permutation within each data split. This keeps
+real ESM2 values and prefix-length distribution while breaking the correct
+antibody-antigen pairing. The mode writes `fig8_antigen_controls.{png,csv}`
+under `artifacts/analysis/figures/`.
 
 Plain study includes both ESM3 and PyRosetta PRE. Validate both first with:
 

@@ -1,11 +1,8 @@
 # =============================================================================
 # model.smk -- train / evaluate / predict / generate, one run per embedder.
 # =============================================================================
-# THE TASK: given the antigen and the LIGHT chain, predict the HEAVY chain.
-# Every rule here consumes the same two conditioning inputs -- the antigen
-# embedding for {tag} and the light-chain context embedding -- and produces or
-# scores heavy chains. The heavy chain is never an input, so no rule has to
-# remember to hide it.
+# TASK: antigen embedding + requested chain type -> antibody chain.
+# No antibody embeddings are consumed by training or inference.
 #
 # Run directory (the training contract):
 #
@@ -47,12 +44,11 @@ def _train_records(w):
 
 
 def _train_embeddings(w):
-    """Antigen + antibody embeddings for every train/val id of this run."""
+    """Antigen embeddings for every train/val id of this run."""
     tag = tag_for_run(w.run)
     splits = list(config["model"]["train_splits"]) + list(config["model"]["val_splits"])
     return _maybe_ancient(
         antigen_embedding_dependencies(tag, splits)
-        + antibody_embedding_dependencies(splits)
     )
 
 
@@ -73,7 +69,6 @@ rule train_model:
     params:
         emb_dir=EMB_DIR,
         tag=lambda w: tag_for_run(w.run),
-        antibody_dir=ANTIBODY_DIR,
         run_id=lambda w: w.run,
         experiment_hash=lambda w: experiment_hash(tag_for_run(w.run)),
         train_splits=config["model"]["train_splits"],
@@ -93,10 +88,10 @@ rule train_model:
 
 
 def _eval_embeddings(w):
-    """Both conditioning inputs for every split reported by evaluation."""
+    """Antigen embeddings for every split reported by evaluation."""
     tag = tag_for_run(w.run)
     splits = ["train", "val", "test"]
-    return antigen_embedding_dependencies(tag, splits) + antibody_embedding_dependencies(splits)
+    return antigen_embedding_dependencies(tag, splits)
 
 
 rule evaluate_model:
@@ -111,7 +106,6 @@ rule evaluate_model:
     params:
         emb_dir=EMB_DIR,
         tag=lambda w: tag_for_run(w.run),
-        antibody_dir=ANTIBODY_DIR,
         splits=["train", "val", "test"],
     log:
         f"{LOG_DIR}/evaluate_{{run}}.log",
@@ -126,15 +120,13 @@ rule evaluate_model:
 
 
 def _predict_embeddings(w):
-    """Both conditioning inputs for every id the run predicts on."""
+    """Antigen embeddings for every id the run predicts on."""
     splits = list(config["model"]["predict_splits"])
-    return antigen_embedding_dependencies(tag_for_run(w.run), splits) + (
-        antibody_embedding_dependencies(splits)
-    )
+    return antigen_embedding_dependencies(tag_for_run(w.run), splits)
 
 
 rule predict_model:
-    """Reconstruct heavy chains for the test split (sanity + recovery metrics)."""
+    """Reconstruct requested chains for the test split (sanity + recovery metrics)."""
     input:
         records=RECORDS_CSV,
         ckpt=f"{RUNS_DIR}/{{run}}/checkpoints/best.pt",
@@ -145,7 +137,6 @@ rule predict_model:
     params:
         emb_dir=EMB_DIR,
         tag=lambda w: tag_for_run(w.run),
-        antibody_dir=ANTIBODY_DIR,
         predict_splits=config["model"]["predict_splits"],
         gen_cfg=config["generation"],
     log:
@@ -161,7 +152,7 @@ rule predict_model:
 
 
 rule generate_designs:
-    """Aim 2: de novo heavy chains against one held-out structure.
+    """Aim 2: de novo requested chains against one held-out structure.
 
     One job per (run, structure) so the most expensive step in the pipeline
     parallelises and a single failed target does not cost the whole sweep. The
@@ -175,10 +166,6 @@ rule generate_designs:
             antigen_batch_marker(tag_for_run(w.run)) if BATCH_EMBEDDINGS
             else generation_antigen_emb(tag_for_run(w.run), w.instance)
         ),
-        antibody_ready=lambda w: (
-            antibody_batch_marker() if BATCH_EMBEDDINGS
-            else generation_antibody_emb(w.instance)
-        ),
     output:
         designs=f"{DESIGNS_DIR}/{{run}}/{{instance}}/designs.csv",
     params:
@@ -187,7 +174,6 @@ rule generate_designs:
         gen_cfg=config["generation"],
         seed=config["experiment"]["seed"],
         antigen_emb=lambda w: generation_antigen_emb(tag_for_run(w.run), w.instance),
-        antibody_emb=lambda w: generation_antibody_emb(w.instance),
     log:
         f"{LOG_DIR}/generate_{{run}}_{{instance}}.log",
     threads: 2

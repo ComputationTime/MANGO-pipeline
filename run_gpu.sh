@@ -10,11 +10,13 @@ set -euo pipefail
 #   ./run_gpu.sh smoke-pyrosetta / study-pyrosetta
 #   ./run_gpu.sh smoke-all / study-all (ESM3 + PyRosetta)
 #   ./run_gpu.sh weights[-esm3|-pyrosetta|-all] (downloads only)
+#   ./run_gpu.sh esm2-ablation (8M/35M/150M plus the cached 650M evaluation)
+#   ./run_gpu.sh antigen-controls (constant, random, pooled, and shuffled controls)
 
 MODE="${1:-smoke}"
 case "$MODE" in
-  smoke|small|study|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all) ;;
-  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all]" >&2; exit 2 ;;
+  smoke|small|study|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls) ;;
+  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | esm2-ablation | antigen-controls" >&2; exit 2 ;;
 esac
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,6 +71,10 @@ elif [[ "$MODE" == small* ]]; then
 fi
 if [[ "$MODE" == "study" ]]; then
   CONFIG_ARGS+=(config/gpu_all.yaml)
+elif [[ "$MODE" == "esm2-ablation" ]]; then
+  CONFIG_ARGS+=(config/esm2_ablation.yaml)
+elif [[ "$MODE" == "antigen-controls" ]]; then
+  CONFIG_ARGS+=(config/antigen_controls.yaml)
 elif [[ "$MODE" == *-esm3 ]]; then
   CONFIG_ARGS+=(config/gpu_esm3.yaml)
 elif [[ "$MODE" == *-pyrosetta ]]; then
@@ -126,6 +132,87 @@ requires_prefetch() {
 # Force the preflight on every invocation so a manifest copied from another
 # machine can never bypass validation of this GPU and driver.
 "${SNAKEMAKE[@]}" --force gpu_preflight
+
+if [[ "$MODE" == "esm2-ablation" ]]; then
+  # The requested control point is an immutable input to this focused run.
+  # Refuse to proceed if it is absent instead of silently retraining 650M.
+  REUSED_ESM2_EVAL="artifacts/runs/esm2__c49369e9/eval.json"
+  if [[ ! -f "$REUSED_ESM2_EVAL" ]]; then
+    echo "The cached 650M evaluation is missing: $REUSED_ESM2_EVAL" >&2
+    echo "Refusing to retrain 650M for the ESM2-size ablation." >&2
+    exit 1
+  fi
+
+  RUN_FAILED=0
+  for embedder in esm2_8m esm2_35m esm2_150m; do
+    echo
+    echo "===== MANGO ESM2 ablation: $embedder ====="
+    WEIGHT_FAILED=0
+    if ! run_for_embedder "$embedder" weights; then
+      WEIGHT_FAILED=1
+      echo "[$embedder] weight setup failed; attempting cached assets." >&2
+    fi
+    if ! run_for_embedder "$embedder" evaluate; then
+      RUN_FAILED=1
+      echo "[$embedder] embedding/training/evaluation failed; continuing." >&2
+    elif [[ "$WEIGHT_FAILED" -ne 0 ]]; then
+      echo "[$embedder] recovered using cached assets." >&2
+    fi
+  done
+
+  if [[ "$RUN_FAILED" -eq 0 ]]; then
+    # mtime-only triggering plus the ancient() 650M input in the plot rule
+    # guarantees that this aggregation step consumes, but never rebuilds, the
+    # completed 650M evaluation.
+    if ! "${SNAKEMAKE[@]}" --rerun-triggers mtime --keep-going esm2_ablation; then
+      RUN_FAILED=1
+      echo "ESM2 ablation plotting failed; completed size runs remain cached." >&2
+    fi
+  else
+    echo "Skipping the ESM2 ablation plot until every new size evaluates." >&2
+  fi
+
+  echo
+  echo "ESM2 ablation figure: artifacts/analysis/figures/fig7_esm2_size_ablation.png"
+  echo "ESM2 ablation data: artifacts/analysis/figures/fig7_esm2_size_ablation_data.csv"
+  exit "$RUN_FAILED"
+fi
+
+if [[ "$MODE" == "antigen-controls" ]]; then
+  SHUFFLED_SOURCE_EVAL="artifacts/runs/esm2__c49369e9/eval.json"
+  SHUFFLED_SOURCE_DIR="artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
+  if [[ ! -f "$SHUFFLED_SOURCE_EVAL" || ! -d "$SHUFFLED_SOURCE_DIR" ]]; then
+    echo "The cached ESM2 650M evaluation and embeddings are required for the shuffled control." >&2
+    echo "Missing source: $SHUFFLED_SOURCE_EVAL or $SHUFFLED_SOURCE_DIR" >&2
+    exit 1
+  fi
+
+  RUN_FAILED=0
+  for embedder in control_constant control_random control_shuffled control_pooled_esm2; do
+    echo
+    echo "===== MANGO antigen control: $embedder ====="
+    if ! run_for_embedder "$embedder" evaluate --rerun-triggers=mtime; then
+      RUN_FAILED=1
+      echo "[$embedder] embedding/training/evaluation failed; continuing." >&2
+    fi
+  done
+
+  if [[ "$RUN_FAILED" -eq 0 ]]; then
+    if ! "${SNAKEMAKE[@]}" --rerun-triggers mtime --keep-going antigen_controls; then
+      RUN_FAILED=1
+      echo "Antigen-control plotting failed; completed models remain cached." >&2
+    fi
+  else
+    echo "Skipping the antigen-control plot until all four controls evaluate." >&2
+  fi
+
+  echo
+  echo "Control evaluations are under artifacts/runs/control_*/eval.json"
+  echo "Control figure: artifacts/analysis/figures/fig8_antigen_controls.png"
+  echo "Control data: artifacts/analysis/figures/fig8_antigen_controls_data.csv"
+  exit "$RUN_FAILED"
+fi
+
 RUN_FAILED=0
 PREFETCH_PID=""
 PREFETCH_TAG=""

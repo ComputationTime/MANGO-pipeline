@@ -12,20 +12,18 @@ The global state file (`config/config.yaml`) is the single source of truth for
 every hyperparameter and experiment option; nothing in `workflow/` hardcodes a
 path, a model size, or a split name.
 
-**The task, everywhere: given the antigen and the light chain, predict the heavy
-chain.** The antibody context embedding is AbLang2 run on `'*|L'` (light chain,
-heavy slot masked), so the heavy chain is absent from every artifact the model
-conditions on — the no-leak guarantee is structural, not a rule each stage has
-to remember. See `module_signatures.md` for the exact sequence layout.
+**The task, everywhere: given the antigen and a requested chain type, generate
+that antibody chain.** No antibody sequence or antibody-derived embedding enters
+the model prefix. See `module_signatures.md` for the exact sequence layout.
 
 ## Active milestone pipeline
 
 ```
-fetch → standardize → process → embed one_hot + AbLang2 → train
-                                                        ├→ evaluate
-                                                        ├→ predict
-                                                        └→ generate (explicit)
-                                                              └→ analysis (explicit)
+fetch → standardize → process → embed antigen → train
+                                             ├→ evaluate
+                                             ├→ predict
+                                             └→ generate (explicit)
+                                                   └→ analysis (explicit)
 ```
 
 | Stage | Output | Status |
@@ -104,22 +102,18 @@ Remaining implementation/runtime constraints:
   N/CA/C backbone independently and inserts a zero separator. It is not a joint
   multichain-complex encoding; the fair-esm GVP/PyG dependencies are pinned to
   PyTorch 2.5.1 and CUDA 12.1 in an isolated environment.
-- **afm** — DECIDED: fold the antigen chains **plus the light chain** and take
-  the per-residue `single` representation. That is exactly the conditioning set,
-  so nothing leaks, and it keeps the interface signal that is AF-M's whole point
-  over a sequence model. Consequence: this is the one embedder whose `L` spans
-  more than the antigen. Chain assembly is implemented
-  (`build_fold_input`); still needs weights, MSAs, GPU — strongly prefer running
-  AF externally and having the rule only *ingest* results. `representation`
-  stays configurable (`single` | `pair` | `structure`) for ablation.
+- **afm** — its prepared fold input contains antigen chains only, matching the
+  study-wide conditioning contract. It still needs weights, MSAs, and GPU
+  infrastructure; strongly prefer external execution plus result ingestion.
+  `representation` stays configurable (`single` | `pair` | `structure`).
 - **pyrosetta_pre** — explicit mmCIF loading and author-chain checks are now in
   place. Confirm the PyRosetta environment and Rosetta chain mapping on its
   first real cluster run.
 
 ### 5. Train
-Teacher-forced causal LM over the **heavy chain**, conditioned on the antigen
-embedding and the light-chain context embedding. Loss is masked to heavy tokens
-plus the end token, so every reported NLL is a heavy-chain NLL.
+Teacher-forced causal LM over each configured target chain. The prefix contains
+projected antigen tokens, a learned heavy/light output selector, and BOS. Loss is
+masked to target residues plus EOS; no antibody sequence is conditioning input.
 
 One run per embedder at `runs/<tag>__<experiment_hash>/`:
 
@@ -138,10 +132,10 @@ own params + model hyperparameters, so changing any of them yields a new run
 directory rather than silently overwriting a result.
 
 ### 6. Inference
-- `evaluate` → `eval.json`: token-weighted heavy-chain NLL + perplexity per
-  split (figure 1).
-- `predict` → `predictions_test.csv`: test-split heavy-chain reconstruction.
-- `generate` → `designs/<run>/<id>/designs.csv`: Aim 2 de novo heavy chains,
+- `evaluate` → `eval.json`: token-weighted NLL + perplexity overall and by chain
+  type per split (figure 1).
+- `predict` → `predictions_test.csv`: test-split selected-chain reconstruction.
+- `generate` → `designs/<run>/<id>/designs.csv`: Aim 2 de novo selected chains,
   one job per (run, structure). Duplicates are kept — the repeat rate is itself
   signal about how sharply a representation constrains generation.
 
@@ -150,13 +144,12 @@ directory rather than silently overwriting a result.
 - `test` (current) — one deterministic representative from every held-out
   `ab_ag_cluster`. Selection fails if any chosen cluster occurs in train or
   validation; `generation.max_targets` can optionally cap the diverse cohort.
-- `target` — the eight therapeutic complexes. Requires filling in
-  `generation.targets[].antigen_chains` **and** `.light_chain` first;
-  `standardize_targets` refuses to guess and fails with the chain ids, lengths,
-  and sequences it found.
+- `target` — the eight therapeutic complexes. Requires
+  `generation.targets[].antigen_chains`; `standardize_targets` refuses to guess
+  them and reports the chain ids, lengths, and sequences it found. An optional
+  recorded partner chain is downstream structure-analysis metadata only.
 
-Either source must supply an antigen **and** a light chain, since that pair is
-the whole conditioning signal.
+Either source must supply an antigen. No antibody sequence is a model input.
 
 ### 7. Analysis
 Every rule fans **in** over `analysis.embedders`, so figures compare

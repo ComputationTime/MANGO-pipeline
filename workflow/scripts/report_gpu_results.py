@@ -160,7 +160,7 @@ def report(specs, preflight_path, figures, figure_data, output_json, output_csv)
     is_fully_complete = not failed and not analysis_incomplete
     result = {
         "status": "complete" if is_fully_complete else "partial",
-        "task": "antigen+light->heavy",
+        "task": "antigen+chain_type->chain",
         "summary": {
             "expected": len(specs),
             "complete": len(fully_complete),

@@ -1,18 +1,4 @@
-"""Per-split NLL and perplexity for a trained run -> eval.json.
-
-This is the data behind handbook figure 1 ("Ag embeddings have negligible
-effect..."): the same number computed identically for every antigen
-representation, so the bars are comparable.
-
-NLL is token-weighted, not example-weighted: total cross-entropy over all
-predicted tokens divided by the number of predicted tokens. That makes it
-insensitive to the length distribution of a split, so train/val/test bars can
-be read against each other.
-
-"Predicted tokens" means the HEAVY chain plus its end token -- the context block
-is masked out of the loss -- so the number is a heavy-chain NLL and is not
-diluted by antigen or light-chain length.
-"""
+"""Token-weighted per-split and per-chain NLL for antigen + chain MANGO."""
 
 import json
 import math
@@ -38,14 +24,10 @@ def _rows(records_csv, split):
     )
 
 
-def _paths(emb_dir, tag, antibody_dir, row):
-    ag = Path(emb_dir) / "antigen" / tag / row.split / f"{row.id}.pt"
-    ab = Path(emb_dir) / "antibody" / antibody_dir / row.split / f"{row.id}.pt"
-    return str(ag), str(ab)
 
 
 @torch.no_grad()
-def _split_nll(model, rows, emb_dir, tag, antibody_dir, device):
+def _split_nll(model, rows, emb_dir, tag, chain, device):
     """(nll_per_token, n_tokens, n_examples, n_skipped) for one split."""
     total_nll = 0.0
     total_tokens = 0
@@ -53,20 +35,21 @@ def _split_nll(model, rows, emb_dir, tag, antibody_dir, device):
     skipped = 0
 
     for row in rows:
-        ag_path, ab_path = _paths(emb_dir, tag, antibody_dir, row)
-        if not (Path(ag_path).is_file() and Path(ab_path).is_file()):
-            skipped += 1
-            continue
+        ag_path = Path(emb_dir) / "antigen" / tag / row.split / f"{row.id}.pt"
+        if not ag_path.is_file():
+            raise FileNotFoundError(f"Incomplete comparison cohort: {ag_path}")
         h_ag = mc.load_embedding(ag_path).to(device)
-        x_ctx = mc.load_embedding(ab_path).to(device)
-        heavy_ids = model.heavy_token_ids(row.resolved_H_seq).to(device)
+        sequence = row.resolved_H_seq if chain == "heavy" else row.resolved_L_seq
+        if not sequence:
+            raise ValueError(f"{row.id}: missing {chain} target")
+        target_ids = model.target_token_ids(sequence).to(device)
 
         # len(H) + 1 for the end token; the context block is labelled -100.
-        n_pred = model.n_target_tokens(heavy_ids)
+        n_pred = model.n_target_tokens(target_ids)
         if n_pred <= 0:
             skipped += 1
             continue
-        loss = model.loss(x_ctx, h_ag, heavy_ids)      # mean CE over those tokens
+        loss = model.loss(h_ag, chain, target_ids)      # mean CE over those tokens
         total_nll += float(loss.item()) * n_pred
         total_tokens += n_pred
         n_examples += 1
@@ -75,7 +58,7 @@ def _split_nll(model, rows, emb_dir, tag, antibody_dir, device):
     return nll, total_tokens, n_examples, skipped
 
 
-def evaluate(records_csv, emb_dir, tag, antibody_dir, ckpt_path, model_config_path,
+def evaluate(records_csv, emb_dir, tag, ckpt_path, model_config_path,
              splits, out_json):
     device = dc.get_device(f"evaluation {tag}")
 
@@ -83,16 +66,15 @@ def evaluate(records_csv, emb_dir, tag, antibody_dir, ckpt_path, model_config_pa
     with open(model_config_path) as fh:
         model_config = json.load(fh)
 
-    model = mc.MangoModel(
-        d_ag=int(ckpt["d_ag"]),
-        n_heads=int(ckpt["n_heads"]),
-        n_layers=int(ckpt["n_layers"]),
-    )
-    model.cross_attn.load_state_dict(ckpt["cross_attn"])
-    model.lm.load_state_dict(ckpt["lm"])
+    cohort_sha256 = mc.comparison_cohort(records_csv)
+    if ckpt.get("cohort_sha256") != cohort_sha256:
+        raise ValueError("Evaluation cohort differs from training checkpoint records")
+    model = mc.MangoModel.from_checkpoint(ckpt)
     model = model.to(device).eval()
 
     result = {
+        "cohort_sha256": cohort_sha256,
+        "loss_reduction": "target_token_mean_including_eos",
         "run_id": model_config.get("run_id"),
         "experiment_hash": model_config.get("experiment_hash"),
         "embedder": tag,
@@ -108,16 +90,23 @@ def evaluate(records_csv, emb_dir, tag, antibody_dir, ckpt_path, model_config_pa
         if not rows:
             print(f"[{tag}] split {split!r}: no rows, skipping", flush=True)
             continue
-        nll, n_tokens, n_examples, skipped = _split_nll(
-            model, rows, emb_dir, tag, antibody_dir, device
-        )
+        by_chain = {}
+        total_nll = 0.0
+        n_tokens = n_examples = skipped = 0
+        for chain in model.target_chains:
+            value, tokens, examples, missing = _split_nll(model, rows, emb_dir, tag, chain, device)
+            by_chain[chain] = {"nll": value, "perplexity": math.exp(min(value, MAX_EXPONENT)) if tokens else float("nan"),
+                               "n_tokens": tokens, "n_examples": examples, "n_skipped_missing_embeddings": missing}
+            total_nll += value * tokens if tokens else 0.0
+            n_tokens += tokens
+            n_examples += examples
+            skipped += missing
+        nll = total_nll / n_tokens if n_tokens else float("nan")
         ppl = math.exp(min(nll, MAX_EXPONENT)) if n_tokens else float("nan")
         result["splits"][split] = {
-            "nll": nll,
-            "perplexity": ppl,
-            "n_tokens": n_tokens,
-            "n_examples": n_examples,
-            "n_skipped_missing_embeddings": skipped,
+            "nll": nll, "perplexity": ppl, "n_tokens": n_tokens,
+            "n_examples": n_examples, "n_skipped_missing_embeddings": skipped,
+            "by_chain": by_chain,
         }
         print(
             f"[{tag}] {split}: nll={nll:.4f} ppl={ppl:.2f} "
@@ -139,7 +128,6 @@ def main():
             records_csv=smk.input.records,
             emb_dir=smk.params.emb_dir,
             tag=smk.params.tag,
-            antibody_dir=smk.params.antibody_dir,
             ckpt_path=smk.input.ckpt,
             model_config_path=smk.input.model_config,
             splits=list(smk.params.splits),
@@ -153,14 +141,13 @@ def main():
     p.add_argument("--records", required=True)
     p.add_argument("--emb-dir", required=True)
     p.add_argument("--tag", required=True)
-    p.add_argument("--antibody-dir", default="ablang2_light_only")
     p.add_argument("--ckpt", required=True)
     p.add_argument("--model-config", required=True)
     p.add_argument("--splits", default="train,val,test")
     p.add_argument("--out", required=True)
     a = p.parse_args()
     evaluate(
-        a.records, a.emb_dir, a.tag, a.antibody_dir, a.ckpt, a.model_config,
+        a.records, a.emb_dir, a.tag, a.ckpt, a.model_config,
         a.splits.split(","), a.out,
     )
 

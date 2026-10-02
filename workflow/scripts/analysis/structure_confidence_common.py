@@ -29,6 +29,8 @@ def clean_sequence(value):
 
 def select_designs(designs_csv, n_designs, seed):
     df = pd.read_csv(designs_csv, dtype={"sequence": str}, keep_default_na=False)
+    if "chain_type" in df and not df["chain_type"].str.lower().eq("heavy").all():
+        raise ValueError(f"{designs_csv} must contain heavy-chain designs only")
     required = {"embedder", "run_id", "target_id", "design_index", "sequence", "status"}
     missing = required - set(df.columns)
     if missing:

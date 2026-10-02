@@ -10,6 +10,7 @@ import torch
 
 
 MODULES = {
+    "antigen_control": "embed_antigen_control",
     "one_hot": "embed_antigen_one_hot",
     "biopython": "embed_antigen_biopython",
     "pyrosetta_pre": "embed_antigen_pyrosetta_pre",
@@ -17,7 +18,6 @@ MODULES = {
     "esm3": "embed_antigen_esm3",
     "esmif": "embed_antigen_esmif",
     "proteinmpnn": "embed_antigen_proteinmpnn",
-    "ablang2": "embed_antibody_ablang2",
 }
 
 
@@ -36,12 +36,18 @@ def _signature(kind, tag, method, spec, seq_source, splits):
 
 
 def _expected_model(method, spec):
+    if method == "antigen_control":
+        mode = str(spec["mode"])
+        width = int(spec.get("width", 1280))
+        tokens = int(spec.get("tokens", 1))
+        seed = int(spec.get("seed", 0))
+        return f"antigen_control_{mode}_d{width}_l{tokens}_seed{seed}_v1"
     if method == "one_hot":
         return "one_hot"
     if method == "biopython":
         return "biopython_protparam"
     if method == "pyrosetta_pre":
-        return f"pyrosetta_{spec['score_function']}"
+        return f"pyrosetta_{spec['score_function']}_antigen_only_v1"
     if method == "esm2":
         return f"esm2_{spec['size']}_UR50D"
     if method in {"esm3", "esmif"}:
@@ -50,8 +56,6 @@ def _expected_model(method, spec):
         return (
             f"proteinmpnn_{spec['model']}_v_48_{int(spec['noise']):03d}"
         )
-    if method == "ablang2":
-        return "ablang2-paired"
     raise ValueError(f"unsupported batch method {method!r}")
 
 
@@ -63,10 +67,9 @@ def _can_reuse(path, row, tag, method, expected_model, dependencies):
         if any(Path(dep).stat().st_mtime > target.stat().st_mtime for dep in dependencies):
             return False
         payload = torch.load(target, map_location="cpu", weights_only=False)
-        expected_tag = "ablang2" if method == "ablang2" else tag
         return (
             payload.get("id") == row["id"]
-            and payload.get("embedder") == expected_tag
+            and payload.get("embedder") == tag
             and payload.get("model_name") == expected_model
             and isinstance(payload.get("shape"), list)
             and payload.get("embedding") is not None
@@ -75,13 +78,11 @@ def _can_reuse(path, row, tag, method, expected_model, dependencies):
         return False
 
 
-def _runtime(module, method, spec, model_dir, weights):
-    if method in {"one_hot", "biopython"}:
+def _runtime(module, method, spec, weights):
+    if method in {"antigen_control", "one_hot", "biopython"}:
         return None
     if method == "pyrosetta_pre":
         return module.load_runtime(spec["score_function"])
-    if method == "ablang2":
-        return module.load_runtime(model_dir)
     if method == "esm2":
         return module.load_runtime(spec["size"])
     if method in {"esm3", "esmif"}:
@@ -92,17 +93,16 @@ def _runtime(module, method, spec, model_dir, weights):
 
 
 def _embed_one(module, method, records_csv, row, out, seq_source, tag, spec,
-               runtime, model_dir, weights):
+               runtime, weights):
     record_id = row["id"]
+    if method == "antigen_control":
+        return module.antigen_control(
+            records_csv, record_id, out, seq_source, tag, spec, row=row,
+        )
     if method == "one_hot":
         return module.one_hot(records_csv, record_id, out, seq_source, tag, row=row)
     if method == "biopython":
         return module.biopython(records_csv, record_id, out, seq_source, tag, row=row)
-    if method == "ablang2":
-        return module.ablang2_embed(
-            records_csv, record_id, out, seq_source, model_dir,
-            row=row, runtime=runtime,
-        )
     if method == "esm2":
         return module.esm2(
             records_csv, record_id, out, seq_source, spec["size"], tag,
@@ -137,8 +137,7 @@ def _embed_one(module, method, records_csv, row, out, seq_source, tag, spec,
 
 
 def batch_embed(records_csv, output_dir, marker, kind, tag, method, spec,
-                seq_source, splits, implementation, model_dir=None,
-                weights=None):
+                seq_source, splits, implementation, weights=None):
     if method not in MODULES:
         raise ValueError(f"batching is not implemented for {method!r}")
     wanted = set(splits)
@@ -175,10 +174,10 @@ def batch_embed(records_csv, output_dir, marker, kind, tag, method, spec,
             reused += 1
         else:
             if runtime is None:
-                runtime = _runtime(module, method, spec, model_dir, weights)
+                runtime = _runtime(module, method, spec, weights)
             _embed_one(
                 module, method, records_csv, row, str(out), seq_source, tag,
-                spec, runtime, model_dir, weights,
+                spec, runtime, weights,
             )
             built += 1
         if index % 100 == 0 or index == len(rows):
@@ -220,7 +219,6 @@ def main():
         seq_source=smk.params.seq_source,
         splits=list(smk.params.splits),
         implementation=smk.input.implementation,
-        model_dir=getattr(smk.params, "model_dir", None),
         weights=getattr(smk.input, "weights", None),
     )
 

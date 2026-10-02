@@ -1,11 +1,10 @@
 # =============================================================================
-# embed.smk -- precompute per-structure antigen + antibody embeddings.
+# embed.smk -- precompute per-structure antigen embeddings.
 # =============================================================================
 # Output layout (the embedder contract):
 #
 #   embeddings/antigen/<tag>/embedder_config.json
 #   embeddings/antigen/<tag>/{train,val,test}/<id>.pt
-#   embeddings/antibody/<method>_<context>/{train,val,test}/<id>.pt
 #
 # One file per structure, so Snakemake fans out over exactly the ids the process
 # checkpoint kept and a single new structure costs a single job.
@@ -44,20 +43,6 @@ rule embedder_config:
         f"{EMB_DIR}/antigen/{{embedder}}/embedder_config.json",
     params:
         spec=lambda w: embedder_spec(w.embedder),
-        seq_source=SEQ_SOURCE,
-    conda:
-        "../envs/process.yaml"
-    script:
-        "../scripts/write_embedder_config.py"
-
-
-rule antibody_embedder_config:
-    output:
-        antibody_emb_config(),
-    params:
-        spec=lambda w: {"method": ANTIBODY_METHOD, "class": "antibody",
-                        "label": ANTIBODY_METHOD, "context": ANTIBODY_CONTEXT,
-                        "masked_chains": ["H"]},
         seq_source=SEQ_SOURCE,
     conda:
         "../envs/process.yaml"
@@ -187,6 +172,23 @@ rule weights:
     """Download and verify all weights required by active embedders."""
     input:
         _active_weight_targets,
+
+
+# --- antigen-free controls ---------------------------------------------------
+rule embed_antigen_control:
+    input:
+        records=_records,
+    output:
+        f"{EMB_DIR}/antigen/{{embedder}}/{{split}}/{{instance}}.pt",
+    params:
+        spec=_spec,
+        seq_source="none",
+    wildcard_constraints:
+        embedder=method_constraint("antigen_control"),
+    conda:
+        "../envs/embed_onehot.yaml"
+    script:
+        "../scripts/embed_antigen_control.py"
 
 
 # --- naive -------------------------------------------------------------------
@@ -342,37 +344,78 @@ rule embed_antigen_afm:
         "../scripts/embed_antigen_afm.py"
 
 
-# --- antibody context (held constant across the study) -----------------------
-# This embeds the LIGHT chain with the heavy slot masked -- the task is to
-# predict the heavy chain from the antigen and the light chain, so the heavy
-# chain must not appear in any conditioning artifact. The directory carries the
-# context in its name (ablang2_light_only), so embeddings built for a different
-# task can never be silently reused.
-rule embed_antibody_ablang2:
-    input:
-        records=_records,
-        weights=ABLANG2_WEIGHTS_MARKER,
-    output:
-        f"{EMB_DIR}/antibody/{ANTIBODY_DIR}/{{split}}/{{instance}}.pt",
-    params:
-        seq_source=SEQ_SOURCE,
-        model_dir=ABLANG2_WEIGHTS_DIR,
-    threads: 2
-    resources:
-        gpu=1,
-        mem_mb=12000,
-    conda:
-        "../envs/embed_ablang2.yaml"
-    script:
-        "../scripts/embed_antibody_ablang2.py"
-
-
 # --- persistent-model batches for the single-GPU profile --------------------
 # The normal fine-grained rules above remain useful for incremental workstation
 # work. On a full study, however, one process per record would reload large
 # pretrained models thousands of times. `execution.batch_embeddings` switches
 # dependencies to these completion markers; each rule loads its model once and
 # writes the same per-record .pt contract beneath the usual split directories.
+rule batch_antigen_control:
+    input:
+        records=RECORDS_CSV,
+        implementation="workflow/scripts/embed_antigen_control.py",
+    output:
+        marker=f"{EMB_DIR}/antigen/{{embedder}}/.batch_complete.json",
+    params:
+        output_dir=lambda w: antigen_emb_dir(w.embedder),
+        kind="antigen", tag=lambda w: w.embedder, method="antigen_control",
+        spec=_spec, seq_source="none", splits=EMBED_SPLITS,
+    wildcard_constraints:
+        embedder=method_constraint("antigen_control"),
+    resources:
+        embedder_slot=1, mem_mb=8000,
+    conda:
+        "../envs/embed_onehot.yaml"
+    script:
+        "../scripts/embed_batch.py"
+
+
+rule batch_antigen_shuffled:
+    input:
+        records=RECORDS_CSV,
+        source_eval=lambda w: ancient(embedder_spec(w.embedder)["source_eval_json"]),
+        implementation="workflow/scripts/shuffle_antigen_embeddings.py",
+    output:
+        marker=f"{EMB_DIR}/antigen/{{embedder}}/.batch_complete.json",
+        mapping=f"{EMB_DIR}/antigen/{{embedder}}/shuffle_map.csv",
+    params:
+        output_dir=lambda w: antigen_emb_dir(w.embedder),
+        source_dir=lambda w: embedder_spec(w.embedder)["source_dir"],
+        source_tag=lambda w: embedder_spec(w.embedder)["source_embedder"],
+        seed=lambda w: int(embedder_spec(w.embedder).get("seed", 0)),
+        splits=EMBED_SPLITS,
+    wildcard_constraints:
+        embedder=method_constraint("antigen_shuffled"),
+    resources:
+        embedder_slot=1, mem_mb=8000,
+    conda:
+        "../envs/embed_onehot.yaml"
+    script:
+        "../scripts/shuffle_antigen_embeddings.py"
+
+
+rule batch_antigen_pooled:
+    input:
+        records=RECORDS_CSV,
+        source_eval=lambda w: ancient(embedder_spec(w.embedder)["source_eval_json"]),
+        implementation="workflow/scripts/pool_antigen_embeddings.py",
+    output:
+        marker=f"{EMB_DIR}/antigen/{{embedder}}/.batch_complete.json",
+    params:
+        output_dir=lambda w: antigen_emb_dir(w.embedder),
+        source_dir=lambda w: embedder_spec(w.embedder)["source_dir"],
+        source_tag=lambda w: embedder_spec(w.embedder)["source_embedder"],
+        splits=EMBED_SPLITS,
+    wildcard_constraints:
+        embedder=method_constraint("antigen_pooled"),
+    resources:
+        embedder_slot=1, mem_mb=8000,
+    conda:
+        "../envs/embed_onehot.yaml"
+    script:
+        "../scripts/pool_antigen_embeddings.py"
+
+
 rule batch_antigen_one_hot:
     input:
         records=RECORDS_CSV,
@@ -522,27 +565,6 @@ rule batch_antigen_proteinmpnn:
         "../scripts/embed_batch.py"
 
 
-rule batch_antibody_ablang2:
-    input:
-        records=RECORDS_CSV,
-        implementation="workflow/scripts/embed_antibody_ablang2.py",
-        weights=ABLANG2_WEIGHTS_MARKER,
-    output:
-        marker=antibody_batch_marker(),
-    params:
-        output_dir=antibody_emb_dir(),
-        kind="antibody", tag=ANTIBODY_DIR, method="ablang2", spec={},
-        seq_source=SEQ_SOURCE, splits=EMBED_SPLITS,
-        model_dir=ABLANG2_WEIGHTS_DIR,
-    threads: 2
-    resources:
-        gpu=1, embedder_slot=1, mem_mb=12000,
-    conda:
-        "../envs/embed_ablang2.yaml"
-    script:
-        "../scripts/embed_batch.py"
-
-
 # --- aggregation targets -----------------------------------------------------
 def _all_antigen_embeddings(wildcards):
     out = []
@@ -552,21 +574,11 @@ def _all_antigen_embeddings(wildcards):
     return out
 
 
-def _all_antibody_embeddings(wildcards):
-    return [antibody_emb_config()] + antibody_embedding_dependencies()
-
-
 rule embed_antigen:
     input:
         _all_antigen_embeddings,
 
 
-rule embed_antibody:
-    input:
-        _all_antibody_embeddings,
-
-
 rule embed:
     input:
         _all_antigen_embeddings,
-        _all_antibody_embeddings,

@@ -1,13 +1,6 @@
-"""Test-split heavy-chain reconstruction -> predictions CSV.
+"""Held-out requested-chain reconstruction from antigen embeddings only.
 
-For each test structure, generates a heavy chain from the precomputed antigen
-embedding plus the light-chain context embedding -- the model's full and only
-conditioning signal -- and records it alongside the true heavy chain. The true
-heavy chain is read for comparison only; it is never fed to the model, and the
-context embedding was built with the heavy slot masked, so there is no leak.
-
-This is the reconstruction sanity check; Aim 2's de novo design lives in
-generate_designs.py.
+Reference antibody sequences are output comparisons, never model inputs.
 """
 
 import csv
@@ -24,6 +17,7 @@ import device_common as dc
 
 COLUMNS = [
     "embedder", "run_id", "status", "split", "id", "pdb_path", "antigen_chains",
+    "chain_type", "true_sequence", "predicted_sequence",
     "light_seq", "true_heavy_seq", "predicted_heavy_seq", "prediction_length",
     "checkpoint",
 ]
@@ -31,20 +25,17 @@ COLUMNS = [
 
 def _load_model(ckpt_path, device):
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    model = mc.MangoModel(
-        d_ag=int(ckpt["d_ag"]),
-        n_heads=int(ckpt["n_heads"]),
-        n_layers=int(ckpt["n_layers"]),
-    )
-    model.cross_attn.load_state_dict(ckpt["cross_attn"])
-    model.lm.load_state_dict(ckpt["lm"])
+    model = mc.MangoModel.from_checkpoint(ckpt)
     return model.to(device).eval(), ckpt
 
 
-def predict(records_csv, emb_dir, tag, antibody_dir, ckpt_path, model_config_path,
+def predict(records_csv, emb_dir, tag, ckpt_path, model_config_path,
             predict_splits, gen_cfg, out_csv):
     device = dc.get_device(f"prediction {tag}")
     model, ckpt = _load_model(ckpt_path, device)
+    chain = model.normalize_chain(gen_cfg.get("chain", "heavy"))
+    if chain not in model.target_chains:
+        raise ValueError(f"Checkpoint was not trained for {chain} chains")
     with open(model_config_path) as fh:
         run_id = json.load(fh).get("run_id", "")
 
@@ -68,31 +59,29 @@ def predict(records_csv, emb_dir, tag, antibody_dir, ckpt_path, model_config_pat
                 "light_seq": row.resolved_L_seq,
                 "true_heavy_seq": row.resolved_H_seq,
                 "checkpoint": ckpt_path,
+                "chain_type": chain,
+                "true_sequence": row.resolved_H_seq if chain == "heavy" else row.resolved_L_seq,
             }
             try:
                 ag_path = Path(emb_dir) / "antigen" / tag / row.split / f"{row.id}.pt"
-                ctx_path = (
-                    Path(emb_dir) / "antibody" / antibody_dir / row.split / f"{row.id}.pt"
-                )
                 h_ag = mc.load_embedding(str(ag_path)).to(device)
-                x_ctx = mc.load_embedding(str(ctx_path)).to(device)
-                ids = model.generate_heavy(
-                    x_ctx,
-                    h_ag,
+                ids = model.generate_chain(
+                    h_ag, chain,
                     max_new_tokens=int(gen_cfg["max_new_tokens"]),
                     do_sample=bool(gen_cfg.get("do_sample", True)),
                     top_p=float(gen_cfg.get("top_p", 1.0)),
                     temperature=float(gen_cfg.get("temperature", 1.0)),
                 )
-                pred = model.decode_heavy(ids)
+                pred = model.decode_chain(ids)
                 base.update(
-                    status="ok", predicted_heavy_seq=pred, prediction_length=len(pred)
+                    status="ok", predicted_sequence=pred,
+                    predicted_heavy_seq=pred if chain == "heavy" else "", prediction_length=len(pred)
                 )
                 n_ok += 1
             except Exception as e:  # keep going; record the failure per-structure
                 base.update(
                     status=f"error: {type(e).__name__}: {e}",
-                    predicted_heavy_seq="",
+                    predicted_sequence="", predicted_heavy_seq="",
                     prediction_length=0,
                 )
             writer.writerow(base)
@@ -107,7 +96,6 @@ def main():
             records_csv=smk.input.records,
             emb_dir=smk.params.emb_dir,
             tag=smk.params.tag,
-            antibody_dir=smk.params.antibody_dir,
             ckpt_path=smk.input.ckpt,
             model_config_path=smk.input.model_config,
             predict_splits=list(smk.params.predict_splits),
@@ -122,17 +110,18 @@ def main():
     p.add_argument("--records", required=True)
     p.add_argument("--emb-dir", required=True)
     p.add_argument("--tag", required=True)
-    p.add_argument("--antibody-dir", default="ablang2_light_only")
     p.add_argument("--ckpt", required=True)
     p.add_argument("--model-config", required=True)
     p.add_argument("--predict-splits", default="test")
     p.add_argument("--out", required=True)
     p.add_argument("--gen-cfg", default="{}")
+    p.add_argument("--chain", choices=["heavy", "light", "H", "L"], default="heavy")
     a = p.parse_args()
     gen = {"max_new_tokens": 130, "do_sample": True, "top_p": 1.0, "temperature": 1.0}
     gen.update(json.loads(a.gen_cfg))
+    gen["chain"] = a.chain
     predict(
-        a.records, a.emb_dir, a.tag, a.antibody_dir, a.ckpt, a.model_config,
+        a.records, a.emb_dir, a.tag, a.ckpt, a.model_config,
         a.predict_splits.split(","), gen, a.out,
     )
 
