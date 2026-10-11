@@ -4,11 +4,87 @@ import math
 from pathlib import Path
 import sys
 
-import ablang2
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import device_common as dc
+
+
+PAIR_KEY_COLUMNS = ["embedder", "run_id", "target_id", "split", "design_index"]
+
+
+def _prepare_cohort(cohort_csv):
+    """Return one row per antibody from wide or long-format input."""
+    df = pd.read_csv(cohort_csv, dtype={"sequence": str}, keep_default_na=False)
+    if "sequence" not in df:
+        raise ValueError("AbLang2 scoring requires a 'sequence' column")
+
+    if "chain_type" not in df:
+        if (df["sequence"].str.strip() == "").any():
+            raise ValueError("AbLang2 scoring requires a heavy sequence for every design")
+        if "light_sequence" not in df:
+            df["light_sequence"] = ""
+        return df
+
+    missing_keys = [column for column in PAIR_KEY_COLUMNS if column not in df]
+    if missing_keys:
+        raise ValueError(
+            "Long-format AbLang2 input is missing pairing columns: "
+            + ", ".join(missing_keys)
+        )
+
+    chain_types = (
+        df["chain_type"].astype(str).str.strip().str.lower().map(
+            {"h": "heavy", "heavy": "heavy", "l": "light", "light": "light"}
+        )
+    )
+    if chain_types.isna().any():
+        invalid = sorted(set(df.loc[chain_types.isna(), "chain_type"].astype(str)))
+        raise ValueError(
+            "Long-format AbLang2 input contains unsupported chain_type values: "
+            + ", ".join(invalid)
+        )
+
+    long_df = df.assign(_chain_type=chain_types)
+    duplicate = long_df.duplicated(PAIR_KEY_COLUMNS + ["_chain_type"], keep=False)
+    if duplicate.any():
+        example = long_df.loc[duplicate, PAIR_KEY_COLUMNS].iloc[0].to_dict()
+        raise ValueError(
+            "Long-format AbLang2 input has duplicate chain rows for design "
+            f"{example}"
+        )
+
+    counts = long_df.groupby(PAIR_KEY_COLUMNS, dropna=False)["_chain_type"].agg(set)
+    incomplete = counts[counts != {"heavy", "light"}]
+    if not incomplete.empty:
+        raise ValueError(
+            "Long-format AbLang2 input requires exactly one Heavy and one Light "
+            f"row per design; found {len(incomplete)} incomplete design(s)"
+        )
+
+    heavy = long_df.loc[long_df["_chain_type"] == "heavy"].drop(
+        columns=["chain_type", "_chain_type"]
+    )
+    light_columns = PAIR_KEY_COLUMNS + ["sequence"]
+    light_renames = {"sequence": "light_sequence"}
+    if "length" in long_df:
+        light_columns.append("length")
+        light_renames["length"] = "light_length"
+    light = long_df.loc[
+        long_df["_chain_type"] == "light", light_columns
+    ].rename(columns=light_renames)
+
+    paired = heavy.merge(
+        light,
+        on=PAIR_KEY_COLUMNS,
+        how="left",
+        sort=False,
+        validate="one_to_one",
+    )
+    if (paired["sequence"].str.strip() == "").any():
+        raise ValueError("AbLang2 scoring requires a heavy sequence for every design")
+    if (paired["light_sequence"].str.strip() == "").any():
+        raise ValueError("Long-format AbLang2 input contains an empty light sequence")
+    return paired
 
 
 def score_ablang2(cohort_csv, model_dir, out_csv):
@@ -18,8 +94,9 @@ def score_ablang2(cohort_csv, model_dir, out_csv):
     Parameters
     ----------
     cohort_csv : str
-        Path to input CSV with a heavy-chain ``sequence`` column. An optional
-        ``light_sequence`` column enables paired H|L scoring.
+        Path to input CSV. Supported layouts are one row per antibody with a
+        heavy-chain ``sequence`` and optional ``light_sequence``, or long
+        format with separate Heavy and Light rows identified by ``chain_type``.
     model_dir : str
         Path to AbLang2 model directory.
     out_csv : str
@@ -30,13 +107,10 @@ def score_ablang2(cohort_csv, model_dir, out_csv):
     pd.DataFrame
         DataFrame with added pseudo-log-likelihood scores.
     """
-    df = pd.read_csv(cohort_csv, dtype={"sequence": str}, keep_default_na=False)
-    if "sequence" not in df:
-        raise ValueError("AbLang2 scoring requires a 'sequence' column")
-    if (df["sequence"].str.strip() == "").any():
-        raise ValueError("AbLang2 scoring requires a heavy sequence for every design")
-    if "light_sequence" not in df:
-        df["light_sequence"] = ""
+    df = _prepare_cohort(cohort_csv)
+
+    import ablang2
+    import device_common as dc
     
     device = str(dc.get_device("AbLang2 scoring"))
     model = ablang2.pretrained(
@@ -86,7 +160,11 @@ def main():
     
     import argparse
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--cohort", required=True, help="Input CSV with sequences")
+    p.add_argument(
+        "--cohort",
+        required=True,
+        help="Wide or Heavy/Light long-format input CSV with sequences",
+    )
     p.add_argument("--model-dir", required=True, help="Path to AbLang2 model")
     p.add_argument("--out", required=True, help="Output CSV path")
     a = p.parse_args()
