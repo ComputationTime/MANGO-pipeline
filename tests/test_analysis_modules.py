@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import pandas as pd
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -183,6 +184,13 @@ class AnalysisModuleTests(unittest.TestCase):
         )
         for figure in ("fig1.png", "fig3.png", "fig4.png", "fig5.png", "fig6.png"):
             self.assertGreater((self.root / figure).stat().st_size, 0)
+        self.assertFalse((self.root / "fig1_subplots").exists())
+        for figure in ("fig3.png", "fig4.png", "fig5.png", "fig6.png"):
+            subplot_dir = self.root / f"{Path(figure).stem}_subplots"
+            subplot_paths = sorted(subplot_dir.glob("*.png"))
+            self.assertTrue(subplot_paths)
+            with Image.open(subplot_paths[0]) as image:
+                self.assertGreaterEqual(image.info["dpi"][0], 299)
 
 
 if __name__ == "__main__":

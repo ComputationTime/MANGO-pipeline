@@ -50,26 +50,23 @@ def plot_species_distribution(
     sns.countplot(
         data=valid,
         x="germline_species",
-        hue="germline_species",
-        hue_order=species_order,
+        hue="embedder",
+        hue_order=embedders,
         order=species_order,
-        palette="colorblind",
-        legend=False,
+        palette=cmap,
         ax=ax,
     )
     pc.style(
         ax,
         "Nearest-germline species assigned by ANARCI",
-        xlabel="Species",
-        ylabel="Number of sequences",
+        xlabel="Species identified",
+        ylabel="Count",
     )
     legend = ax.get_legend()
-    if len(embedders) == 1 and legend is not None:
+    if legend is not None:
         legend.remove()
-    elif legend is not None:
-        legend.set_title("Antigen representation")
-        for text, tag in zip(legend.get_texts(), embedders):
-            text.set_text(labels.get(tag, tag))
+    if len(embedders) > 1:
+        pc.add_axes_legend(ax, embedders, labels, cmap)
 
     summary = (
         valid.groupby(["embedder", "germline_species"])
@@ -219,20 +216,11 @@ def plot_all_embedder_genes(
             if species
         ]
 
-    handles, raw_legend_labels = axes[0].get_legend_handles_labels()
-    for ax in axes[:2]:
+    for ax in axes:
         legend = ax.get_legend()
         if legend is not None:
             legend.remove()
-    fig.legend(
-        handles,
-        [labels.get(tag, tag) for tag in raw_legend_labels],
-        title="Embedder",
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.01),
-        ncol=min(4, len(raw_legend_labels)),
-        frameon=False,
-    )
+        pc.add_axes_legend(ax, embedders, labels, cmap)
 
     gene_summary = []
     for segment, column in (("V", "v_family"), ("J", "j_family")):

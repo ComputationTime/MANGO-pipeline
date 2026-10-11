@@ -1,8 +1,10 @@
 """Shared visual grammar for handbook plots; contains no metric computation."""
 
 from pathlib import Path
+import re
 
 import matplotlib
+from matplotlib.transforms import Bbox
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -26,12 +28,14 @@ EMBEDDER_COLORS = {
 }
 FONT_FAMILY = "DejaVu Sans"
 TEXT = "#262626"
-TITLE_SIZE = 14
-SUPTITLE_SIZE = 16
-LABEL_SIZE = 12
-TICK_SIZE = 10
-LEGEND_SIZE = 10
-ANNOTATION_SIZE = 9
+TITLE_SIZE = 18
+SUPTITLE_SIZE = 20
+LABEL_SIZE = 16
+TICK_SIZE = 14
+TICK_LENGTH = 5
+TICK_WIDTH = 1.1
+LEGEND_SIZE = 12
+ANNOTATION_SIZE = 11
 INK = TEXT
 MUTED = TEXT
 GRID = "#D9D9D9"
@@ -50,6 +54,10 @@ plt.rcParams.update({
     "ytick.color": MUTED,
     "xtick.labelsize": TICK_SIZE,
     "ytick.labelsize": TICK_SIZE,
+    "xtick.major.size": TICK_LENGTH,
+    "ytick.major.size": TICK_LENGTH,
+    "xtick.major.width": TICK_WIDTH,
+    "ytick.major.width": TICK_WIDTH,
     "grid.color": GRID,
     "grid.linewidth": 0.8,
     "legend.frameon": False,
@@ -73,7 +81,12 @@ def style(ax, title="", xlabel="", ylabel=""):
     ax.xaxis.grid(False)
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_color(GRID)
-    ax.tick_params(colors=MUTED)
+    ax.tick_params(
+        colors=MUTED,
+        labelsize=TICK_SIZE,
+        length=TICK_LENGTH,
+        width=TICK_WIDTH,
+    )
     ax.set_title(title, fontsize=TITLE_SIZE, pad=15)
     ax.set_xlabel(xlabel, fontsize=LABEL_SIZE)
     ax.set_ylabel(ylabel, fontsize=LABEL_SIZE)
@@ -89,13 +102,47 @@ def label_bars(ax, bars, values, fmt="{:.3f}"):
                     va="bottom", fontsize=ANNOTATION_SIZE, color=TEXT)
 
 
-def add_legend(fig, embedders, labels, color_map):
+def add_legend(fig, embedders, labels, color_map, location="lower center"):
     handles = [
         matplotlib.patches.Patch(color=color_map[tag], label=labels.get(tag, tag))
         for tag in embedders
     ]
-    fig.legend(handles=handles, loc="lower center", ncol=min(4, len(handles)),
-               frameon=False, fontsize=LEGEND_SIZE, bbox_to_anchor=(0.5, -0.01))
+    if location == "upper right":
+        fig.legend(
+            handles=handles,
+            loc="upper right",
+            ncol=1,
+            frameon=False,
+            fontsize=LEGEND_SIZE,
+            bbox_to_anchor=(0.995, 0.94),
+        )
+        fig._mango_legend_location = "upper right"
+        return
+    fig.legend(
+        handles=handles,
+        loc="lower center",
+        ncol=min(4, len(handles)),
+        frameon=False,
+        fontsize=LEGEND_SIZE,
+        bbox_to_anchor=(0.5, -0.01),
+    )
+
+
+def add_axes_legend(ax, embedders, labels, color_map):
+    """Place an embedder legend inside an axes at its upper-right corner."""
+    handles = [
+        matplotlib.patches.Patch(color=color_map[tag], label=labels.get(tag, tag))
+        for tag in embedders
+    ]
+    ax.legend(
+        handles=handles,
+        loc="upper right",
+        frameon=True,
+        facecolor="white",
+        edgecolor="none",
+        framealpha=0.85,
+        fontsize=LEGEND_SIZE,
+    )
 
 
 def shared_edges(frame, column, bins=30):
@@ -121,6 +168,13 @@ def empty_panel(ax, title, message, xlabel="", ylabel=""):
 def normalize_typography(fig):
     """Apply one font and text color with consistent role-based sizes."""
     for ax in fig.axes:
+        ax.tick_params(
+            axis="both",
+            colors=MUTED,
+            labelsize=TICK_SIZE,
+            length=TICK_LENGTH,
+            width=TICK_WIDTH,
+        )
         ax.title.set(
             fontfamily=FONT_FAMILY,
             fontsize=TITLE_SIZE,
@@ -189,17 +243,93 @@ def normalize_typography(fig):
         )
 
 
+def _subplot_slug(ax, index):
+    """Return a stable, readable filename component for one subplot."""
+    candidates = [ax.get_title(), ax.get_ylabel(), ax.get_xlabel()]
+    label = next((value for value in candidates if str(value).strip()), "")
+    slug = re.sub(r"[^a-z0-9]+", "_", str(label).lower()).strip("_")
+    return slug[:80] or f"panel_{index:02d}"
+
+
+def _save_subplots(fig, out_figure, dpi):
+    """Save each panel of a multi-panel figure as an independent PNG."""
+    output = Path(out_figure)
+    subplot_dir = output.parent / f"{output.stem}_subplots"
+    visible_axes = [candidate for candidate in fig.axes if candidate.get_visible()]
+    if len(visible_axes) <= 1:
+        if subplot_dir.is_dir():
+            for stale_path in subplot_dir.glob("*.png"):
+                stale_path.unlink()
+            subplot_dir.rmdir()
+        return []
+
+    subplot_dir.mkdir(parents=True, exist_ok=True)
+    for stale_path in subplot_dir.glob("*.png"):
+        stale_path.unlink()
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    written = []
+
+    for index, ax in enumerate(visible_axes, start=1):
+        temporary_legend = None
+        if ax.get_legend() is None and fig.legends:
+            source_legend = fig.legends[0]
+            handles = getattr(source_legend, "legend_handles", None)
+            if handles is None:
+                handles = getattr(source_legend, "legendHandles", [])
+            labels = [text.get_text() for text in source_legend.get_texts()]
+            temporary_legend = ax.legend(
+                handles,
+                labels,
+                loc="best",
+                frameon=True,
+                facecolor="white",
+                edgecolor="none",
+                framealpha=0.85,
+                fontsize=LEGEND_SIZE,
+            )
+            fig.canvas.draw()
+
+        bbox = ax.get_tightbbox(renderer)
+        if temporary_legend is not None:
+            bbox = Bbox.union([bbox, temporary_legend.get_window_extent(renderer)])
+        bbox_inches = bbox.transformed(fig.dpi_scale_trans.inverted()).expanded(
+            1.04, 1.08
+        )
+        subplot_path = subplot_dir / (
+            f"{output.stem}_subplot_{index:02d}_{_subplot_slug(ax, index)}.png"
+        )
+        fig.savefig(
+            subplot_path,
+            dpi=max(300, int(dpi)),
+            bbox_inches=bbox_inches,
+            facecolor="white",
+        )
+        written.append(subplot_path)
+        if temporary_legend is not None:
+            temporary_legend.remove()
+            fig.canvas.draw()
+    return written
+
+
 def save(fig, data, out_figure, out_data, dpi):
     normalize_typography(fig)
     Path(out_data).parent.mkdir(parents=True, exist_ok=True)
     data.to_csv(out_data, index=False)
     Path(out_figure).parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout(rect=(0, 0.07, 1, 0.97))
+    if getattr(fig, "_mango_legend_location", None) == "upper right":
+        fig.tight_layout(rect=(0, 0.02, 0.82, 0.97))
+    else:
+        fig.tight_layout(rect=(0, 0.07, 1, 0.97))
     fig.savefig(
         out_figure,
         dpi=max(300, int(dpi)),
         bbox_inches="tight",
         facecolor="white",
     )
+    subplot_paths = _save_subplots(fig, out_figure, dpi)
     plt.close(fig)
-    print(f"wrote {out_figure} and {out_data}", flush=True)
+    print(
+        f"wrote {out_figure}, {len(subplot_paths)} subplot PNG(s), and {out_data}",
+        flush=True,
+    )

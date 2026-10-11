@@ -30,7 +30,7 @@ def _read(paths, source):
 def plot_ab_likeness(inputs, embedders, labels, dpi, out_figure, out_data):
     raw = {name: _read(inputs[name], name) for name, *_ in PANELS}
     cmap = pc.colors(embedders)
-    fig, axes = plt.subplots(1, 3, figsize=(12.6, 4.4))
+    fig, axes = plt.subplots(1, 3, figsize=(14.4, 6.2))
     summary = []
     for ax, (source, column, ylabel) in zip(axes, PANELS):
         frame = raw[source]
@@ -57,6 +57,7 @@ def plot_ab_likeness(inputs, embedders, labels, dpi, out_figure, out_data):
         if not any(item["score_source"] == source and item["n"] > 0 for item in summary):
             pc.empty_panel(ax, "", "No valid scores in this smoke cohort",
                            ylabel=ylabel)
+            ax.texts[-1].set_position((0.5, 0.25))
             continue
         x = np.arange(len(embedders))
         bars = ax.bar(x, medians, 0.72, color=[cmap[t] for t in embedders],
@@ -67,7 +68,23 @@ def plot_ab_likeness(inputs, embedders, labels, dpi, out_figure, out_data):
             pc.label_bars(ax, bars, medians)
         ax.set_xticks(x, [labels.get(t, t) for t in embedders], rotation=25, ha="right")
         pc.style(ax, "", ylabel=ylabel)
-    pc.add_legend(fig, embedders, labels, cmap)
+        ax._mango_data_top = float(np.nanmax(np.asarray(medians) + np.asarray(upper)))
+    for ax in axes:
+        pc.add_axes_legend(ax, embedders, labels, cmap)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    for ax in axes:
+        data_top = getattr(ax, "_mango_data_top", None)
+        if data_top is None:
+            continue
+        legend = ax.get_legend()
+        legend_bottom = legend.get_window_extent(renderer).transformed(
+            ax.transAxes.inverted()
+        ).y0
+        available_fraction = max(0.12, legend_bottom - 0.08)
+        bottom = min(0.0, ax.get_ylim()[0])
+        required_top = bottom + (data_top - bottom) * 1.05 / available_fraction
+        ax.set_ylim(bottom=bottom, top=max(ax.get_ylim()[1], required_top))
     pc.save(fig, pd.DataFrame(summary), out_figure, out_data, dpi)
 
 
