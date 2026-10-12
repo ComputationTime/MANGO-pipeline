@@ -4,11 +4,13 @@ import sys
 
 from pathlib import Path
 
-import pandas as pd
 import torch
 from antiberty import AntiBERTyRunner
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+import chain_common
 import device_common as dc
 
 
@@ -41,7 +43,7 @@ def _pseudo_log_likelihood(model, sequence, batch_size):
 
 def score_antiberty(cohort_csv, batch_size, out_csv):
     dc.get_device("AntiBERTy scoring")
-    df = pd.read_csv(cohort_csv, dtype={"sequence": str}, keep_default_na=False)
+    df = chain_common.read_chain_rows(cohort_csv)
     model = AntiBERTyRunner()
     scores, statuses = [], []
     for sequence in df["sequence"]:

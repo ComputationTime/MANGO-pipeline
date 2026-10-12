@@ -264,8 +264,9 @@ analysis:
     antiberty:
       batch_size: 16
     ablang2:
-      # Paired H|L pseudo-log-likelihood, converted to pseudo perplexity in the
-      # antibody-likeness figure. This is slower than confidence scoring.
+      # Independent Heavy-only and Light-only pseudo-log-likelihood, converted
+      # to pseudo perplexity in the antibody-likeness figure. This is slower
+      # than confidence scoring.
       mode: "pseudo_log_likelihood"
 
   germline:
