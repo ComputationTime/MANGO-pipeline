@@ -25,8 +25,11 @@ EMBEDDER_COLORS = {
     "afm": PALETTE[7],
     "control_constant": PALETTE[7],
     "control_random": PALETTE[0],
+    "control_constant_l1": PALETTE[1],
+    "control_random_l1": PALETTE[6],
     "control_shuffled": PALETTE[4],
     "control_pooled_esm2": PALETTE[2],
+    "control_cross_attention_esm2": PALETTE[5],
 }
 FONT_FAMILY = "DejaVu Sans"
 TEXT = "#262626"

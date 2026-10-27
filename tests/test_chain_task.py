@@ -41,9 +41,13 @@ class ChainTaskTests(unittest.TestCase):
                 n_target_tokens=lambda ids: ids.shape[1]-1,
                 loss=lambda antigen, chain, ids: torch.tensor(2.0 if chain == 'light' else 3.0),
             )
-            result = evaluate_mango._split_nll(model, [row], tmp, 'one_hot', 'light', 'cpu')
+            context_lengths = {}
+            result = evaluate_mango._split_nll(model, [row], tmp, 'one_hot', 'light', 'cpu', context_lengths)
             self.assertEqual(selected, ['EF'])
             self.assertEqual(result, (2.0, 3, 1, 0))
+            self.assertEqual(context_lengths, {'a': 2})
+            evaluate_mango._split_nll(model, [row], tmp, 'one_hot', 'heavy', 'cpu', context_lengths)
+            self.assertEqual(context_lengths, {'a': 2})  # one length per record, not per chain
 
     def test_light_designs_cannot_enter_heavy_only_analysis(self):
         with tempfile.TemporaryDirectory() as tmp:

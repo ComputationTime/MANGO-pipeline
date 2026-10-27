@@ -8,6 +8,8 @@ _ESM2_ABLATION_CFG = config["analysis"].get("esm2_ablation", {})
 _ESM2_ABLATION_TAGS = list(_ESM2_ABLATION_CFG.get("embedders", []))
 _ANTIGEN_CONTROL_CFG = config["analysis"].get("antigen_controls", {})
 _ANTIGEN_CONTROL_TAGS = list(_ANTIGEN_CONTROL_CFG.get("embedders", []))
+_ANTIGEN_LENGTH_CFG = config["analysis"].get("antigen_length_ablation", {})
+_ANTIGEN_LENGTH_TAGS = list(_ANTIGEN_LENGTH_CFG.get("embedders", []))
 
 
 def _esm2_ablation_evals(wildcards):
@@ -76,6 +78,24 @@ def _antigen_control_evals(wildcards):
         else:
             paths.append(eval_json(tag))
     return paths
+
+
+def _antigen_length_evals(wildcards):
+    if not _ANTIGEN_LENGTH_TAGS:
+        raise ValueError("load config/antigen_controls.yaml and config/antigen_length_ablation.yaml")
+    inactive = [tag for tag in _ANTIGEN_LENGTH_TAGS
+                if tag != "esm2" and tag not in ACTIVE_EMBEDDERS]
+    if inactive:
+        raise ValueError(f"length-ablation controls must be active: {inactive}")
+    return [_antigen_length_reference(wildcards) if tag == "esm2" else eval_json(tag)
+            for tag in _ANTIGEN_LENGTH_TAGS]
+
+
+def _antigen_length_reference(wildcards):
+    path = _ANTIGEN_LENGTH_CFG.get("reference_eval_json")
+    if not path or not Path(path).is_file():
+        raise ValueError("the completed ESM2 evaluation is required; it will not be retrained")
+    return ancient(path)
 
 
 rule plot_fig2_structure_confidence:
@@ -170,6 +190,32 @@ rule antigen_controls:
     input:
         rules.plot_antigen_controls.output.figure,
         rules.plot_antigen_controls.output.data,
+
+
+rule plot_antigen_length_ablation:
+    input:
+        evals=_antigen_length_evals,
+        reference=_antigen_length_reference,
+        iglm=[IGLM_EVAL] if _ANTIGEN_LENGTH_CFG.get("iglm_baseline", False) else [],
+    output:
+        figure=figure_path("fig9_antigen_context_length_ablation"),
+        data=figure_data_path("fig9_antigen_context_length_ablation"),
+    params:
+        embedders=_ANTIGEN_LENGTH_TAGS,
+        specs={tag: embedder_spec(tag) for tag in _ANTIGEN_LENGTH_TAGS},
+        dpi=_DPI,
+    log:
+        f"{LOG_DIR}/plot_fig9_antigen_context_length_ablation.log",
+    conda:
+        "../../envs/analysis_plot.yaml"
+    script:
+        "../../scripts/analysis/plot_antigen_length_ablation.py"
+
+
+rule antigen_length_ablation:
+    input:
+        rules.plot_antigen_length_ablation.output.figure,
+        rules.plot_antigen_length_ablation.output.data,
 
 
 rule plot_fig3_ablikeness:

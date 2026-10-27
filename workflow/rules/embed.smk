@@ -154,6 +154,8 @@ rule verify_pyrosetta_assets:
 def _active_weight_targets(wildcards):
     targets = [ABLANG2_WEIGHTS_MARKER]
     for tag in ACTIVE_EMBEDDERS:
+        if embedding_tag(tag) != tag:
+            continue  # cached source tensors are explicit model inputs
         method = embedder_method(tag)
         if method in {"esm2", "esm3", "esmif"}:
             targets.append(pretrained_weight_marker(tag))
@@ -174,10 +176,23 @@ rule weights:
         _active_weight_targets,
 
 
-# --- antigen-free controls ---------------------------------------------------
+# --- constant/random controls -----------------------------------------------
+def _control_shape_sources(w):
+    spec = embedder_spec(w.embedder)
+    if spec.get("shape_mode", "fixed") != "match_source":
+        return []
+    instances = (
+        [(w.split, w.instance)] if hasattr(w, "split")
+        else instances_by_split(EMBED_SPLITS)
+    )
+    return [f"{spec['source_dir']}/{split}/{instance}.pt"
+            for split, instance in instances]
+
+
 rule embed_antigen_control:
     input:
         records=_records,
+        shape_sources=_control_shape_sources,
     output:
         f"{EMB_DIR}/antigen/{{embedder}}/{{split}}/{{instance}}.pt",
     params:
@@ -189,6 +204,25 @@ rule embed_antigen_control:
         "../envs/embed_onehot.yaml"
     script:
         "../scripts/embed_antigen_control.py"
+
+
+rule embed_antigen_merged:
+    input:
+        records=_records,
+        sources=_control_shape_sources,
+    output:
+        f"{EMB_DIR}/antigen/{{embedder}}/{{split}}/{{instance}}.pt",
+    params:
+        spec=_spec,
+    wildcard_constraints:
+        embedder=method_constraint("antigen_merged"),
+    threads: 2
+    resources:
+        mem_mb=8000,
+    conda:
+        "../envs/embed_onehot.yaml"
+    script:
+        "../scripts/embed_antigen_merged.py"
 
 
 # --- naive -------------------------------------------------------------------
@@ -353,6 +387,7 @@ rule embed_antigen_afm:
 rule batch_antigen_control:
     input:
         records=RECORDS_CSV,
+        shape_sources=_control_shape_sources,
         implementation="workflow/scripts/embed_antigen_control.py",
     output:
         marker=f"{EMB_DIR}/antigen/{{embedder}}/.batch_complete.json",
@@ -368,6 +403,28 @@ rule batch_antigen_control:
         "../envs/embed_onehot.yaml"
     script:
         "../scripts/embed_batch.py"
+
+
+rule batch_antigen_merged:
+    input:
+        records=RECORDS_CSV,
+        sources=_control_shape_sources,
+        implementation="workflow/scripts/embed_antigen_merged.py",
+    output:
+        marker=f"{EMB_DIR}/antigen/{{embedder}}/.batch_complete.json",
+    params:
+        output_dir=lambda w: antigen_emb_dir(w.embedder),
+        kind="antigen", tag=lambda w: w.embedder, method="antigen_merged",
+        spec=_spec, seq_source="frozen_antigen_embedding", splits=EMBED_SPLITS,
+    wildcard_constraints:
+        embedder=method_constraint("antigen_merged"),
+    threads: 2
+    resources:
+        embedder_slot=1, mem_mb=8000,
+    conda:
+        "../envs/embed_onehot.yaml"
+    script:
+        "../scripts/embed_antigen_merged.py"
 
 
 rule batch_antigen_shuffled:

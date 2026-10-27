@@ -1,0 +1,21 @@
+# Preserve frozen 2k/4k/8k references and add prefix MANGO at every size.
+experiment_root: artifacts/experiments/asd_scaling_16k_v1
+prototype_config: config/asd_prototype.yaml
+prototype_root: artifacts/experiments/asd_her2_free_prototype_v1
+iglm_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+reference_config: config/asd_scaling_8k.yaml
+report_script: workflow/scripts/report_asd_scaling_8k.py
+sizes: [2000, 4000, 8000, 16000]
+max_antigen_tokens: 768
+max_records_per_antigen: 10000
+allow_partial_training_shuffle: true
+seed: 0
+bootstrap_repeats: 2000
+runs:
+  n16000_iglm: {size: 16000, family: iglm, epochs: 1}
+  n16000_cross: {size: 16000, family: cross_attention, epochs: 1}
+  n16000_shuffled: {size: 16000, family: cross_attention, epochs: 1, shuffled: true}
+  n2000_mango: {size: 2000, family: mango, epochs: 1}
+  n4000_mango: {size: 4000, family: mango, epochs: 1}
+  n8000_mango: {size: 8000, family: mango, epochs: 1}
+  n16000_mango: {size: 16000, family: mango, epochs: 1}

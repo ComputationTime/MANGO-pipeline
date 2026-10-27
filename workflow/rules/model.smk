@@ -69,11 +69,12 @@ rule train_model:
     params:
         emb_dir=EMB_DIR,
         tag=lambda w: tag_for_run(w.run),
+        embedding_tag=lambda w: embedding_tag(tag_for_run(w.run)),
         run_id=lambda w: w.run,
         experiment_hash=lambda w: experiment_hash(tag_for_run(w.run)),
         train_splits=config["model"]["train_splits"],
         val_splits=config["model"]["val_splits"],
-        model_cfg=config["model"],
+        model_cfg=lambda w: model_config_for_tag(tag_for_run(w.run)),
         global_state=config,
     log:
         f"{LOG_DIR}/train_{{run}}.log",
@@ -163,7 +164,9 @@ rule generate_designs:
         model_config=f"{RUNS_DIR}/{{run}}/model_config.json",
         records=records_for_split(GENERATION_SPLIT),
         antigen_ready=lambda w: (
-            antigen_batch_marker(tag_for_run(w.run)) if BATCH_EMBEDDINGS
+            antigen_batch_marker(tag_for_run(w.run)) if (
+                BATCH_EMBEDDINGS and embedding_tag(tag_for_run(w.run)) == tag_for_run(w.run)
+            )
             else generation_antigen_emb(tag_for_run(w.run), w.instance)
         ),
     output:

@@ -37,11 +37,8 @@ def _signature(kind, tag, method, spec, seq_source, splits):
 
 def _expected_model(method, spec):
     if method == "antigen_control":
-        mode = str(spec["mode"])
-        width = int(spec.get("width", 1280))
-        tokens = int(spec.get("tokens", 1))
-        seed = int(spec.get("seed", 0))
-        return f"antigen_control_{mode}_d{width}_l{tokens}_seed{seed}_v1"
+        from embed_antigen_control import control_model_name
+        return control_model_name(spec)
     if method == "one_hot":
         return "one_hot"
     if method == "biopython":
@@ -164,6 +161,10 @@ def batch_embed(records_csv, output_dir, marker, kind, tag, method, spec,
     for index, row in enumerate(rows, start=1):
         out = Path(output_dir) / row["split"] / f"{row['id']}.pt"
         dependencies = [records_csv, implementation, __file__]
+        if method == "antigen_control":
+            source = module.control_source_path(row, spec)
+            if source is not None:
+                dependencies.append(str(source))
         if method in {"esmif", "proteinmpnn", "pyrosetta_pre"}:
             dependencies.append(row["pdb_path"])
         if weights:

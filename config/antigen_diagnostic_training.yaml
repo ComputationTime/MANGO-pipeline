@@ -1,0 +1,50 @@
+# Predeclared small follow-ups to the checkpoint probes; exploratory, seed 0.
+experiment_root: artifacts/experiments/antigen_conditioning_diagnostics_v1/training
+mango_root: artifacts/experiments/asd_her2_free_prototype_v1
+iglm_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+cohort_dir: artifacts/experiments/asd_her2_free_prototype_v1/cohort
+seed: 0
+lr: 1.0e-4
+epochs_per_stage: 1
+train_probe_records: 96
+arms:
+  cross_continue:
+    kind: mango
+    architecture: cross_attention
+    mode: correct
+    source: cross_finetuned
+  iglm_continue:
+    kind: iglm
+    mode: correct
+    source: iglm_finetuned
+  iglm_cross_frozen:
+    kind: iglm_cross
+    mode: correct
+    source: iglm_finetuned
+    freeze_decoder: true
+  iglm_cross_frozen_shuffled:
+    kind: iglm_cross
+    mode: correct
+    source: iglm_finetuned
+    freeze_decoder: true
+    shuffle_training_antigens: true
+  iglm_cross_joint:
+    kind: iglm_cross
+    mode: correct
+    source: iglm_finetuned
+    freeze_decoder: false
+  prefix_rebased:
+    kind: mango
+    architecture: mango
+    mode: rebased
+    source: prototype_asd
+  cross_pooled:
+    kind: mango
+    architecture: cross_attention
+    mode: pooled
+    source: prototype_asd
+  prefix_causal_control:
+    kind: mango
+    architecture: mango
+    mode: explicit_causal_prefix
+    source: prototype_asd

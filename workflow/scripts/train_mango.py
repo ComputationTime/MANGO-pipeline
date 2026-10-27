@@ -5,6 +5,7 @@ sequences are decoder targets only; no antibody embeddings are loaded.
 """
 
 import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -17,6 +18,8 @@ import model_common as mc
 import device_common as dc
 from training_curve import write_training_plot
 from training_order import epoch_training_rows
+from chain_examples import example_chains
+from training_losses import loss_configuration
 
 
 def normalize_gradients(parameters, n_tokens):
@@ -35,6 +38,8 @@ def _rows(records_csv, splits, target_chains):
     examples = []
     for row in df.itertuples(index=False):
         for chain in target_chains:
+            if chain not in example_chains(row):
+                continue
             sequence = getattr(row, "resolved_H_seq" if chain == "heavy" else "resolved_L_seq")
             if not sequence:
                 raise ValueError(f"{row.id}: missing {chain} target sequence")
@@ -45,6 +50,27 @@ def _rows(records_csv, splits, target_chains):
 
 def _path(emb_dir, tag, row):
     return str(Path(emb_dir) / "antigen" / tag / row.split / f"{row.id}.pt")
+
+
+def initialize_from_checkpoint(model, path, tag, embedding_tag):
+    """Transfer matching weights only; the new phase gets a fresh optimizer."""
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    required = {"architecture": model.architecture, "task": model.TASK,
+                "target_contract": "imgt_variable_vh_vl_v1", "d_ag": model.d_ag,
+                "embedder": tag, "embedding_tag": embedding_tag,
+                "target_chains": list(model.target_chains)}
+    for key, expected in required.items():
+        if checkpoint.get(key) != expected:
+            raise ValueError(f"Initialization checkpoint {key} differs: "
+                             f"{checkpoint.get(key)!r} != {expected!r}")
+    if not checkpoint.get("cohort_sha256"):
+        raise ValueError("Initialization checkpoint lacks source cohort provenance")
+    for name in ["chain_embedding", "antigen_projection", "lm"]:
+        getattr(model, name).load_state_dict(checkpoint[name], strict=True)
+    return {"path": str(path), "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+            "source_run_id": checkpoint.get("run_id"),
+            "source_cohort_sha256": checkpoint["cohort_sha256"],
+            "source_epoch": checkpoint.get("epoch"), "optimizer_loaded": False}
 
 
 def measure_training(function):
@@ -103,9 +129,12 @@ def train(
     run_id,
     experiment_hash,
     global_state,
+    embedding_tag=None,
+    initial_checkpoint=None,
 ):
     cohort_sha256 = mc.comparison_cohort(records_csv)
     device = dc.get_device(f"training {tag}")
+    embedding_tag = embedding_tag or tag
     torch.manual_seed(int(model_cfg.get("seed", 0)))
 
     target_chains = tuple(mc.MangoModel.normalize_chain(c) for c in model_cfg.get("target_chains", ["heavy", "light"]))
@@ -120,14 +149,21 @@ def train(
     print(f"[{tag}] train={len(train_rows)} val={len(val_rows)} device={device}", flush=True)
 
     # Antigen dim is read from a real embedding, so a mis-declared H is impossible.
-    sample_ag = _path(emb_dir, tag, train_rows[0])
+    sample_ag = _path(emb_dir, embedding_tag, train_rows[0])
     d_ag = mc.load_embedding(sample_ag).shape[-1]
     print(f"[{tag}] antigen dim d_Ag_rep={d_ag}", flush=True)
 
     architecture = model_cfg.get("architecture", mc.MangoModel.ARCHITECTURE)
-    if architecture != mc.MangoModel.ARCHITECTURE:
-        raise ValueError(f"Unsupported model architecture: {architecture}")
-    model = mc.MangoModel(d_ag=d_ag, target_chains=target_chains).to(device)
+    training_loss = loss_configuration(model_cfg.get('training_loss'))
+    model = mc.MangoModel(d_ag=d_ag, target_chains=target_chains,
+                          architecture=architecture).to(device)
+    initialization = (initialize_from_checkpoint(model, initial_checkpoint, tag, embedding_tag)
+                      if initial_checkpoint is not None else None)
+    if initial_checkpoint is not None:
+        source = torch.load(initial_checkpoint, map_location='cpu', weights_only=False)
+        if loss_configuration(source.get('training_loss')) != training_loss:
+            raise ValueError('Pretraining/fine-tuning loss configurations differ')
+        del source
 
     opt = torch.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -148,7 +184,8 @@ def train(
     with open(out_run_config, "w") as fh:
         json.dump(
             {"run_id": run_id, "experiment_hash": experiment_hash,
-             "embedder": tag, "global_state": global_state},
+             "embedder": tag, "global_state": global_state,
+             "initialization": initialization, "training_loss": training_loss},
             fh, indent=2, sort_keys=True, default=str,
         )
         fh.write("\n")
@@ -158,6 +195,10 @@ def train(
         "run_id": run_id,
         "experiment_hash": experiment_hash,
         "embedder": tag,
+        "embedding_tag": embedding_tag,
+        "initialization": initialization,
+        "training_loss": training_loss,
+        "checkpoint_selection": "validation_nll",
         # Recorded so a checkpoint can never be misread as a different task.
         "loss_reduction": "target_token_mean_including_eos",
         "target_contract": "imgt_variable_vh_vl_v1",
@@ -170,7 +211,10 @@ def train(
         "trainable_parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
         "decoder_trainable_parameters": sum(p.numel() for p in model.lm.parameters() if p.requires_grad),
         "projection_trainable_parameters": sum(p.numel() for p in model.antigen_projection.parameters() if p.requires_grad),
-        "architecture": model.ARCHITECTURE,
+        "architecture": model.architecture,
+        "antigen_in_decoder_prefix": not model.uses_cross_attention,
+        "fixed_antibody_positions": model.uses_fixed_positions,
+        "cross_attention_trainable_parameters": model.cross_attention_parameters,
         "vocab_size": int(model.configs.vocab_size),
         "n_layer": int(model.configs.n_layer),
         "n_head": int(model.configs.n_head),
@@ -183,6 +227,8 @@ def train(
     history = []
     global_iteration = 0
     plot_interval = max(1, int(model_cfg.get("loss_plot_interval", 250)))
+    plot_sample_interval = max(1, int(model_cfg.get('plot_sample_interval', 1)))
+    plot_label = 'Focal objective (target-token mean)' if training_loss['name'] == 'focal' else 'NLL loss'
 
     curve_fh = open(out_training_curve, "w", newline="")
     curve_writer = csv.DictWriter(
@@ -200,7 +246,8 @@ def train(
             "record_id": record_id,
             "chain_type": chain_type,
         }
-        history.append(point)
+        if phase != 'train' or iteration == 1 or iteration % plot_sample_interval == 0:
+            history.append(point)
         curve_writer.writerow(point)
         curve_fh.flush()
 
@@ -208,15 +255,20 @@ def train(
         nonlocal global_iteration
         model.train(train_mode)
         total = 0.0
+        total_nll = 0.0
         total_tokens = 0
         window_tokens = 0
         if train_mode:
             opt.zero_grad()
         for i, row in enumerate(rows):
-            h_ag = mc.load_embedding(_path(emb_dir, tag, row)).to(device)
+            h_ag = mc.load_embedding(_path(emb_dir, embedding_tag, row)).to(device)
             target_ids = model.target_token_ids(row.sequence).to(device)
             with torch.set_grad_enabled(train_mode):
-                loss = model.loss(h_ag, row.chain, target_ids)
+                if training_loss['name'] == 'focal':
+                    loss, nll = model.loss(h_ag, row.chain, target_ids,
+                                           training_loss=training_loss, return_nll=True)
+                else:
+                    loss = nll = model.loss(h_ag, row.chain, target_ids)
             n_tokens = model.n_target_tokens(target_ids)
             if train_mode:
                 (loss * n_tokens).backward()
@@ -228,19 +280,24 @@ def train(
                     opt.zero_grad()
             loss_value = float(loss.item())
             total += loss_value * n_tokens
+            total_nll += float(nll.detach().item()) * n_tokens
             total_tokens += n_tokens
             if train_mode:
                 global_iteration += 1
                 record_point(global_iteration, epoch, "train", loss_value, row.id, row.chain)
                 if global_iteration % plot_interval == 0:
-                    write_training_plot(history, out_training_plot, run_id)
-        return total / total_tokens
+                    write_training_plot(history, out_training_plot, run_id, ylabel=plot_label)
+        return total / total_tokens, total_nll / total_tokens
 
     def checkpoint(path, epoch, val_loss):
         torch.save(
             {
                 "cohort_sha256": cohort_sha256,
-                "architecture": model.ARCHITECTURE,
+                "target_contract": "imgt_variable_vh_vl_v1",
+                "initialization": initialization,
+                "training_loss": training_loss,
+                "checkpoint_selection": "validation_nll",
+                "architecture": model.architecture,
                 "task": model.TASK,
                 "target_chains": list(model.target_chains),
                 "chain_embedding": model.chain_embedding.state_dict(),
@@ -249,6 +306,7 @@ def train(
                 "optimizer": opt.state_dict(),
                 "d_ag": int(d_ag),
                 "embedder": tag,
+                "embedding_tag": embedding_tag,
                 "run_id": run_id,
                 "experiment_hash": experiment_hash,
                 "val_loss": val_loss,
@@ -265,17 +323,21 @@ def train(
                 epoch_rows = epoch_training_rows(
                     train_rows, seed=seed, epoch=epoch, shuffle=shuffle_train
                 )
-                tr = run_epoch(epoch_rows, True, epoch)
-                va = run_epoch(val_rows, False, epoch) if val_rows else tr
-                record_point(global_iteration, epoch, "train_epoch", tr)
-                record_point(global_iteration, epoch, "validation", va)
-                write_training_plot(history, out_training_plot, run_id)
+                tr_objective, tr = run_epoch(epoch_rows, True, epoch)
+                va_objective, va = run_epoch(val_rows, False, epoch)
+                record_point(global_iteration, epoch, "train_epoch", tr_objective)
+                record_point(global_iteration, epoch, "validation", va_objective)
+                write_training_plot(history, out_training_plot, run_id, ylabel=plot_label)
                 improved = va < best
 
                 metrics_fh.write(
                     json.dumps(
                         {"epoch": epoch, "iteration": global_iteration,
                          "train_loss": tr, "val_loss": va,
+                         "train_nll": tr, "val_nll": va,
+                         "train_objective": tr_objective, "val_objective": va_objective,
+                         "training_loss": training_loss,
+                         "checkpoint_selection": "validation_nll",
                          "train_order_seed": seed + epoch,
                          "train_shuffled": shuffle_train,
                          "embedder": tag, "run_id": run_id, "improved": improved}
@@ -285,7 +347,8 @@ def train(
                 metrics_fh.flush()
                 print(
                     f"[{tag}] iteration {global_iteration}: "
-                    f"train_loss={tr:.4f} val_loss={va:.4f}"
+                    f"train_nll={tr:.4f} val_nll={va:.4f} "
+                    f"objective={training_loss['name']} train_objective={tr_objective:.4f}"
                     f"{' *' if improved else ''}",
                     flush=True,
                 )
@@ -321,6 +384,7 @@ def main():
             records_csv=smk.input.records,
             emb_dir=smk.params.emb_dir,
             tag=smk.params.tag,
+            embedding_tag=smk.params.embedding_tag,
             train_splits=list(smk.params.train_splits),
             val_splits=list(smk.params.val_splits),
             model_cfg=dict(smk.params.model_cfg),
@@ -343,6 +407,8 @@ def main():
     p.add_argument("--records", required=True)
     p.add_argument("--emb-dir", required=True)
     p.add_argument("--tag", required=True)
+    p.add_argument("--embedding-tag", default=None)
+    p.add_argument("--initial-checkpoint", default=None)
     p.add_argument("--run-dir", required=True)
     p.add_argument("--train-splits", default="train")
     p.add_argument("--val-splits", default="val")
@@ -363,6 +429,7 @@ def main():
         str(rd / "model_config.json"), str(rd / "metrics.jsonl"),
         str(rd / "training_curve.csv"), str(rd / "training_curve.png"),
         str(rd / "config.json"), rd.name, "manual", {},
+        embedding_tag=a.embedding_tag, initial_checkpoint=a.initial_checkpoint,
     )
 
 

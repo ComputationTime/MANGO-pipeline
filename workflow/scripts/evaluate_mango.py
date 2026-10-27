@@ -11,6 +11,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import model_common as mc
 import device_common as dc
+from chain_examples import example_chains
+from embedding_store import embedding_available
 
 # exp() of a large NLL overflows; cap it the way perplexity is normally reported.
 MAX_EXPONENT = 50.0
@@ -19,15 +21,16 @@ MAX_EXPONENT = 50.0
 def _rows(records_csv, split):
     df = pd.read_csv(records_csv, dtype=str, keep_default_na=False)
     df = df[df["split"] == split]
-    return list(
-        df[["id", "split", "resolved_H_seq", "resolved_L_seq"]].itertuples(index=False)
-    )
+    columns = ["id", "split", "resolved_H_seq", "resolved_L_seq"]
+    if 'example_target_chains' in df.columns:
+        columns.append('example_target_chains')
+    return list(df[columns].itertuples(index=False))
 
 
 
 
 @torch.no_grad()
-def _split_nll(model, rows, emb_dir, tag, chain, device):
+def _split_nll(model, rows, emb_dir, tag, chain, device, context_lengths=None):
     """(nll_per_token, n_tokens, n_examples, n_skipped) for one split."""
     total_nll = 0.0
     total_tokens = 0
@@ -35,10 +38,14 @@ def _split_nll(model, rows, emb_dir, tag, chain, device):
     skipped = 0
 
     for row in rows:
+        if chain not in example_chains(row):
+            continue
         ag_path = Path(emb_dir) / "antigen" / tag / row.split / f"{row.id}.pt"
-        if not ag_path.is_file():
+        if not embedding_available(ag_path):
             raise FileNotFoundError(f"Incomplete comparison cohort: {ag_path}")
         h_ag = mc.load_embedding(ag_path).to(device)
+        if context_lengths is not None:
+            context_lengths[row.id] = int(h_ag.shape[1])
         sequence = row.resolved_H_seq if chain == "heavy" else row.resolved_L_seq
         if not sequence:
             raise ValueError(f"{row.id}: missing {chain} target")
@@ -59,7 +66,7 @@ def _split_nll(model, rows, emb_dir, tag, chain, device):
 
 
 def evaluate(records_csv, emb_dir, tag, ckpt_path, model_config_path,
-             splits, out_json):
+             splits, out_json, evaluation_subsets=None):
     device = dc.get_device(f"evaluation {tag}")
 
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
@@ -71,6 +78,7 @@ def evaluate(records_csv, emb_dir, tag, ckpt_path, model_config_path,
         raise ValueError("Evaluation cohort differs from training checkpoint records")
     model = mc.MangoModel.from_checkpoint(ckpt)
     model = model.to(device).eval()
+    embedding_tag = ckpt.get("embedding_tag", tag)
 
     result = {
         "cohort_sha256": cohort_sha256,
@@ -78,23 +86,43 @@ def evaluate(records_csv, emb_dir, tag, ckpt_path, model_config_path,
         "run_id": model_config.get("run_id"),
         "experiment_hash": model_config.get("experiment_hash"),
         "embedder": tag,
+        "embedding_tag": embedding_tag,
+        "architecture": model.architecture,
+        "antigen_in_decoder_prefix": not model.uses_cross_attention,
+        "cross_attention_trainable_parameters": model.cross_attention_parameters,
         "task": model_config.get("task"),
         "d_ag": int(ckpt["d_ag"]),
         "checkpoint_epoch": ckpt.get("epoch"),
         "checkpoint_val_loss": ckpt.get("val_loss"),
+        "initialization": ckpt.get("initialization"),
+        "training_loss": ckpt.get('training_loss', {'name': 'cross_entropy'}),
+        "checkpoint_selection": ckpt.get('checkpoint_selection', 'validation_nll'),
+        "evaluation_loss": "cross_entropy",
         "splits": {},
     }
 
-    for split in splits:
-        rows = _rows(records_csv, split)
+    planned = [(split, _rows(records_csv, split)) for split in splits]
+    for label, subset in (evaluation_subsets or {}).items():
+        if label in splits:
+            raise ValueError(f"Evaluation subset duplicates split: {label}")
+        ids = set(subset["ids"])
+        rows = [r for r in _rows(records_csv, subset["source_split"]) if r.id in ids]
+        if not ids or {r.id for r in rows} != ids:
+            raise ValueError(f"Evaluation subset {label} has missing or unknown IDs")
+        planned.append((label, rows))
+
+    for split, rows in planned:
         if not rows:
             print(f"[{tag}] split {split!r}: no rows, skipping", flush=True)
             continue
         by_chain = {}
+        context_lengths = {}
         total_nll = 0.0
         n_tokens = n_examples = skipped = 0
         for chain in model.target_chains:
-            value, tokens, examples, missing = _split_nll(model, rows, emb_dir, tag, chain, device)
+            value, tokens, examples, missing = _split_nll(
+                model, rows, emb_dir, embedding_tag, chain, device, context_lengths
+            )
             by_chain[chain] = {"nll": value, "perplexity": math.exp(min(value, MAX_EXPONENT)) if tokens else float("nan"),
                                "n_tokens": tokens, "n_examples": examples, "n_skipped_missing_embeddings": missing}
             total_nll += value * tokens if tokens else 0.0
@@ -107,6 +135,12 @@ def evaluate(records_csv, emb_dir, tag, ckpt_path, model_config_path,
             "nll": nll, "perplexity": ppl, "n_tokens": n_tokens,
             "n_examples": n_examples, "n_skipped_missing_embeddings": skipped,
             "by_chain": by_chain,
+            "antigen_context_tokens": {
+                "n_records": len(context_lengths),
+                "min": min(context_lengths.values()),
+                "max": max(context_lengths.values()),
+                "mean": sum(context_lengths.values()) / len(context_lengths),
+            },
         }
         print(
             f"[{tag}] {split}: nll={nll:.4f} ppl={ppl:.2f} "

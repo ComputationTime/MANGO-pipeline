@@ -1,0 +1,24 @@
+# Eight final ESM2 models: 2 losses x 2 architectures x 2 training routes.
+experiment_root: artifacts/experiments/asd_focal_comparison_v1
+cohort_dir: artifacts/experiments/asd_cath_transfer_v1/cohort
+embedding_root: artifacts/experiments/asd_focal_comparison_v1
+original_sabdab_records: artifacts/data/sabdab2_v0.1.0/processed/records.csv
+original_esm2_dir: artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2
+esm2_size: t33_650M
+pretraining_dataset: asd
+objectives:
+  cross_entropy: {name: cross_entropy}
+  focal: {name: focal, gamma: 2.0}
+architectures:
+  mango: antigen_chain_gpt2_v3
+  cross_attention: antigen_chain_cross_attention_gpt2_v1
+model:
+  target_chains: [heavy, light]
+  epochs: 10
+  lr: 1.0e-4
+  patience: 2
+  grad_accum: 1
+  loss_plot_interval: 1000
+  plot_sample_interval: 100
+  seed: 0
+  shuffle_train: true

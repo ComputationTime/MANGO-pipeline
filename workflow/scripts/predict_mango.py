@@ -63,7 +63,7 @@ def predict(records_csv, emb_dir, tag, ckpt_path, model_config_path,
                 "true_sequence": row.resolved_H_seq if chain == "heavy" else row.resolved_L_seq,
             }
             try:
-                ag_path = Path(emb_dir) / "antigen" / tag / row.split / f"{row.id}.pt"
+                ag_path = Path(emb_dir) / "antigen" / ckpt.get("embedding_tag", tag) / row.split / f"{row.id}.pt"
                 h_ag = mc.load_embedding(str(ag_path)).to(device)
                 ids = model.generate_chain(
                     h_ag, chain,

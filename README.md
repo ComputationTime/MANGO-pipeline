@@ -326,11 +326,82 @@ The implemented Boltz/Chai contract and intended AF3 ingestion are documented in
 
 ## Antigen-only model contract
 
-The supported architecture is `antigen_chain_gpt2_v3`. Its prefix contains the
+The default architecture is `antigen_chain_gpt2_v3`. Its prefix contains the
 projected antigen representation, one learned heavy/light output selector, and
 the beginning-of-sequence token. A causal GPT-2 decoder then emits the requested
 chain. Only target residues and EOS receive loss; no antibody sequence,
-antibody embedding, species label, or cross-attention context is accepted.
+antibody embedding or species label is accepted as conditioning.
+
+The `antigen-controls` mode also trains `control_cross_attention_esm2`, using
+architecture `antigen_chain_cross_attention_gpt2_v1`. It reuses the same ESM2
+antigen tensors as separate cross-attention memory at every decoder layer and
+keeps only the H/L selector and BOS in the prefix. It has extra attention
+parameters and a distinct checkpoint identity. See
+[the comparison controls](docs/comparison_controls.md) for the exact comparison.
+
+Use `./run_gpu.sh antigen-length-ablation` to sweep constant, random and
+token-merged ESM2 inputs over 1 token, ¼L, ½L, ¾L and L per record.
+All use width 1280; fractional lengths
+are rounded up with a one-token minimum. ESM2 merges similar frozen antigen
+tokens with mass-weighted averages; its endpoints reuse mean-pooled ESM2 and
+the original full-length ESM2 evaluation. It writes separate train/test NLL
+panels to `artifacts/analysis/figures/fig9_antigen_context_length_ablation.png`,
+with exact values and actual context-length statistics in the matching
+`fig9_antigen_context_length_ablation_data.csv`. See
+[the cloud setup guide](docs/cloud_gpu_setup.md) for the run and resume details.
+
+Use `./run_gpu.sh iglm-baseline` to train the full IgLM architecture from random
+initialization on the same SAbDab2 cohort and add a horizontal reference to
+Figure 9. It uses the same optimizer, seed, target sequences, training order and
+validation stopping rule as MANGO. IgLM receives native H/L tokens and a fixed
+species start token, with residues plus EOS scored by the common token mean.
+The baseline has no antigen context and therefore one reference value per split.
+The full `antigen-length-ablation` mode also includes this baseline.
+
+For the separately audited AbRank experiment, use `./run_gpu.sh abrank-transfer`
+after preparing the CATH-protected cohorts. This trains eight controls on
+AbRank, then fine-tunes matching checkpoints on SAbDab2. New plots and results
+stay under `artifacts/experiments/abrank_cath_transfer_v1/`. See
+[the cohort, contamination audit, and transfer protocol](docs/abrank_transfer.md).
+
+The current pretraining test uses **ASD 2.0**: run `./run_gpu.sh asd-transfer`.
+It includes all BUZZ affinity bins with positive binding evidence, protects the
+same SAbDab2 validation/test cohorts, and writes separate results under
+`artifacts/experiments/asd_cath_transfer_v1/`. See [the ASD transfer protocol](docs/asd_transfer.md).
+
+Use `./run_gpu.sh asd-loss-comparison` for the eight ESM2 models comparing
+standard/focal loss, normal/cross-attention MANGO, and SAbDab2-only/ASD-pretrained
+training. All are evaluated with ordinary NLL on the same native cohort.
+See [the loss comparison protocol](docs/asd_loss_comparison.md).
+
+For rapid iteration, use `./run_gpu.sh asd-prototype`: a HER2-free ASD subset
+with 2,000 training records and one epoch per stage for all eight final ESM2
+models. See [the prototype protocol](docs/asd_prototype.md).
+
+After the prototype finishes, `./run_gpu.sh asd-prototype-iglm` adds two matched
+IgLM controls: SAbDab2-only and HER2-free ASD → SAbDab2. Both start from random
+weights and use CE with one epoch per stage. It reuses the completed MANGO
+evaluations and writes `plots/sabdab2_loss_comparison_with_iglm.png` / `.csv`
+in the prototype results directory.
+
+Use `./run_gpu.sh antigen-diagnostics` to probe antigen dependence, region NLL
+and cluster uncertainty in the prototype. `./run_gpu.sh antigen-diagnostic-training`
+runs small controlled follow-ups for target positions, pooling and IgLM warm
+starts. See [the diagnostic protocol](docs/antigen_diagnostics.md).
+
+Use `./run_gpu.sh asd-scaling` for the ASD-only 2,000/4,000-record comparison of
+IgLM and paired/shuffled ESM2 cross-attention, with fixed held-out targets and
+two-epoch optimization controls. See [the scaling protocol](docs/asd_scaling.md).
+Use `./run_gpu.sh asd-scaling-8k` to append three 8,000-record runs and compare
+them with those frozen baselines. The antigen cap is relaxed for 8k; two antigens
+supply 33% of its records. Held-out targets and the entire 4k training prefix
+remain fixed.
+Use `./run_gpu.sh asd-scaling-16k` to extend the comparison to 16,000 records
+and train regular MANGO with an antigen prefix at 2k/4k/8k/16k. The figure shows
+overall and CDR3 NLL. The dominant antigen requires a partially shuffled 16k
+control; the retained correct-antigen fraction is recorded and shown on the plot.
+Use `./run_gpu.sh asd-scaling-fixed-positions` to add the improved MANGO prefix
+variant with antigen-independent antibody positions at all four training sizes.
 
 Changing from an older conditioning contract requires fresh training. The
 architecture participates in run identity, and checkpoint loading rejects older

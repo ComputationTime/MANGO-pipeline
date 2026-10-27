@@ -1,9 +1,12 @@
-# Negative controls trained on the same SAbDab2 cohort and with the same MANGO
+# Conditioning controls trained on the same SAbDab2 cohort and with the same MANGO
 # decoder/training configuration as the ESM2 650M run. Constant and random use
-# one 1280-wide token, so neither antigen sequence nor antigen length enters the
-# model. Shuffled uses real ESM2 650M tensors assigned to a different record in
+# each record's full ESM2 shape, replacing all values with zeros or deterministic
+# noise. Prefix length is retained, but antigen embedding values are not used.
+# Shuffled uses real ESM2 650M tensors assigned to a different record in
 # the same split, preserving ESM2 widths and length distribution but breaking
 # the biological pairing.
+# Cross-attention reuses correctly paired ESM2 tensors as separate decoder
+# memory, with a two-token selector/BOS prefix and extra attention parameters.
 execution:
   min_gpu_memory_gb: 10
 
@@ -11,22 +14,28 @@ embedders:
   control_constant:
     method: antigen_control
     class: control
-    label: "Constant (no antigen)"
+    label: "Constant (ESM2 shape)"
     mode: constant
     width: 1280
-    tokens: 1
+    shape_mode: match_source
+    source_embedder: esm2
+    source_model_name: esm2_t33_650M_UR50D
+    source_dir: "artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
     seed: 0
-    conditioning_scope: no_antigen_fixed_token_v1
+    conditioning_scope: no_antigen_values_source_shape_v1
 
   control_random:
     method: antigen_control
     class: control
-    label: "Random (no antigen)"
+    label: "Random (ESM2 shape)"
     mode: random
     width: 1280
-    tokens: 1
+    shape_mode: match_source
+    source_embedder: esm2
+    source_model_name: esm2_t33_650M_UR50D
+    source_dir: "artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
     seed: 0
-    conditioning_scope: no_antigen_fixed_token_v1
+    conditioning_scope: no_antigen_values_source_shape_v1
     randomization_scope: record_id
 
   control_shuffled:
@@ -50,11 +59,21 @@ embedders:
     output_tokens: 1
     conditioning_scope: correct_antigen_mean_pooled_v1
 
+  control_cross_attention_esm2:
+    method: esm2
+    class: control
+    label: "Cross-attention ESM2"
+    size: "t33_650M"
+    embedding_source: esm2
+    model_overrides:
+      architecture: antigen_chain_cross_attention_gpt2_v1
+
 active_embedders:
   - control_constant
   - control_random
   - control_shuffled
   - control_pooled_esm2
+  - control_cross_attention_esm2
 
 model:
   retrain: true
@@ -66,6 +85,7 @@ analysis:
       - control_random
       - control_pooled_esm2
       - control_shuffled
+      - control_cross_attention_esm2
       - esm2
     reuse_tag: esm2
     reuse_eval_json: "artifacts/runs/esm2__c49369e9/eval.json"

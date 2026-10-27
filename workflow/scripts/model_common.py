@@ -1,7 +1,8 @@
 """Antigen + requested chain type -> antibody chain, using a causal GPT-2 head.
 
-Prefix: projected antigen, learned H/L selector, BOS. Only target residues and
-EOS receive labels. No antibody sequence enters the conditioning prefix.
+Default prefix: projected antigen, learned H/L selector, BOS. The cross-attention
+control keeps antigen memory separate and prefixes only the selector and BOS.
+Only target residues and EOS receive labels. No antibody enters conditioning.
 """
 
 import importlib
@@ -36,6 +37,8 @@ class MangoModel(nn.Module):
     """Antigen-only conditioning with an explicit heavy/light selector."""
 
     ARCHITECTURE = "antigen_chain_gpt2_v3"
+    FIXED_POSITION_ARCHITECTURE = "antigen_chain_fixed_position_gpt2_v1"
+    CROSS_ATTENTION_ARCHITECTURE = "antigen_chain_cross_attention_gpt2_v1"
     TASK = "antigen+chain_type->chain"
     CHAIN_IDS = {"heavy": 0, "light": 1}
 
@@ -47,8 +50,14 @@ class MangoModel(nn.Module):
         except KeyError:
             raise ValueError(f"Unknown chain {chain!r}; choose heavy/H or light/L") from None
 
-    def __init__(self, d_ag: int, mango_dir=None, target_chains=("heavy", "light")):
+    def __init__(self, d_ag: int, mango_dir=None, target_chains=("heavy", "light"),
+                 architecture=ARCHITECTURE):
         super().__init__()
+        if architecture not in {self.ARCHITECTURE, self.FIXED_POSITION_ARCHITECTURE, self.CROSS_ATTENTION_ARCHITECTURE}:
+            raise ValueError(f"Unsupported model architecture: {architecture}")
+        self.architecture = architecture
+        self.uses_cross_attention = architecture == self.CROSS_ATTENTION_ARCHITECTURE
+        self.uses_fixed_positions = architecture == self.FIXED_POSITION_ARCHITECTURE
         mu = import_mango("mango.utils.mango_utils", mango_dir)
         self.vocab = dict(mu.ablang_vocab)
         self.decode = {i: c for c, i in self.vocab.items()}
@@ -60,7 +69,11 @@ class MangoModel(nn.Module):
 
         from transformers import GPT2LMHeadModel
 
-        self.lm = GPT2LMHeadModel(self.configs)
+        decoder_type = GPT2LMHeadModel
+        if self.uses_fixed_positions:
+            from fixed_position_prefix import FixedPositionGPT2LMHeadModel
+            decoder_type = FixedPositionGPT2LMHeadModel
+        self.lm = decoder_type(self.configs)
         self.chain_embedding = nn.Embedding(2, self.d_model)
         # Projection width must not alter decoder initialization or dropout RNG.
         with torch.random.fork_rng(devices=[]):
@@ -69,6 +82,24 @@ class MangoModel(nn.Module):
         if not self.target_chains or len(set(self.target_chains)) != len(self.target_chains):
             raise ValueError("target_chains must be nonempty and unique")
         self.d_ag = d_ag
+        if self.uses_cross_attention:
+            # Preserve the baseline decoder, selector, projection and RNG state.
+            # Only the new cross-attention modules receive different weights.
+            self.configs.add_cross_attention = True
+            with torch.random.fork_rng(devices=[]):
+                cross_lm = GPT2LMHeadModel(self.configs)
+                missing, unexpected = cross_lm.load_state_dict(self.lm.state_dict(), strict=False)
+                if unexpected or any(
+                    ".crossattention." not in name and ".ln_cross_attn." not in name
+                    for name in missing
+                ):
+                    raise RuntimeError("Cross-attention decoder differs from the shared baseline")
+            self.lm = cross_lm
+
+    @property
+    def cross_attention_parameters(self):
+        return sum(p.numel() for name, p in self.lm.named_parameters()
+                   if ".crossattention." in name or ".ln_cross_attn." in name)
 
     # --- tokenisation --------------------------------------------------------
     def target_token_ids(self, sequence: str) -> "torch.Tensor":
@@ -92,13 +123,16 @@ class MangoModel(nn.Module):
     # --- forward paths -------------------------------------------------------
     @classmethod
     def from_checkpoint(cls, checkpoint):
-        if checkpoint.get("architecture") != cls.ARCHITECTURE:
+        if checkpoint.get("architecture") not in {
+            cls.ARCHITECTURE, cls.FIXED_POSITION_ARCHITECTURE, cls.CROSS_ATTENTION_ARCHITECTURE
+        }:
             raise ValueError(
                 "Incompatible MANGO checkpoint: antigen + chain conditioning requires "
                 "fresh training; checkpoints from earlier conditioning architectures "
                 "cannot be reused."
             )
-        model = cls(d_ag=int(checkpoint["d_ag"]), target_chains=checkpoint["target_chains"])
+        model = cls(d_ag=int(checkpoint["d_ag"]), target_chains=checkpoint["target_chains"],
+                    architecture=checkpoint["architecture"])
         model.chain_embedding.load_state_dict(checkpoint["chain_embedding"])
         model.antigen_projection.load_state_dict(checkpoint["antigen_projection"])
         model.lm.load_state_dict(checkpoint["lm"])
@@ -107,9 +141,9 @@ class MangoModel(nn.Module):
     def _check_length(self, length):
         if length > self.configs.n_positions:
             raise ValueError(
-                f"Antigen + chain selector + target sequence requires {length} positions, "
+                f"Decoder prefix + target sequence requires {length} positions, "
                 f"exceeding GPT-2 capacity {self.configs.n_positions}. "
-                "Reduce antigen length or generation length."
+                "Reduce decoder prefix or target/generation length."
             )
 
     def _prefix(self, h_ag, chain):
@@ -118,16 +152,24 @@ class MangoModel(nn.Module):
         if chain not in self.target_chains:
             raise ValueError(f"Checkpoint was not trained for {chain} chains")
         device = next(self.parameters()).device
-        antigen = self.antigen_projection(h_ag)
         start = self.lm.transformer.wte(
             torch.tensor([[self.vocab["<"]]], device=device)
         )
         selector = self.chain_embedding(torch.tensor([[self.CHAIN_IDS[chain]]], device=device))
-        prefix = torch.cat([antigen, selector, start], dim=1)
+        pieces = [selector, start]
+        if not self.uses_cross_attention:
+            pieces.insert(0, self.antigen_projection(h_ag))
+        prefix = torch.cat(pieces, dim=1)
         self._check_length(prefix.shape[1])
         return prefix
 
-    def loss(self, h_ag, chain, target_ids):
+    def _antigen_context(self, h_ag, batch_size=1):
+        if not self.uses_cross_attention:
+            return {}
+        memory = self.antigen_projection(h_ag).expand(int(batch_size), -1, -1).contiguous()
+        return {"encoder_hidden_states": memory}
+
+    def loss(self, h_ag, chain, target_ids, training_loss=None, return_nll=False):
         """Teacher-forced target-chain cross-entropy.
 
         Loss covers the target residues and the end token only: the context block
@@ -136,7 +178,7 @@ class MangoModel(nn.Module):
         """
         device = next(self.parameters()).device
         target_ids = target_ids.to(device)
-        prefix = self._prefix(h_ag, chain)  # (1, m+2, d_model), ends on '<'
+        prefix = self._prefix(h_ag, chain)  # ends on '<'; antigen is optional here
         # target_ids[:, 1:] is target + EOS -- '<' is already in the prefix.
         tail = self.lm.transformer.wte(target_ids[:, 1:])  # (1, n+1, d_model)
         inputs = torch.cat([prefix, tail], dim=1)
@@ -149,7 +191,18 @@ class MangoModel(nn.Module):
         # labels[t+1]. Placing target+EOS immediately after the '<' position makes
         # BOS predict the first residue and the last residue predict EOS.
         labels[0, prefix.shape[1] :] = target_ids[0, 1:]
-        return self.lm(inputs_embeds=inputs, labels=labels).loss
+        context = self._antigen_context(h_ag)
+        if self.uses_fixed_positions:
+            from fixed_position_prefix import causal_context
+            context.update(causal_context(h_ag.shape[1], inputs))
+        if training_loss is None:
+            nll = self.lm(inputs_embeds=inputs, labels=labels,
+                          **context).loss
+            return (nll, nll) if return_nll else nll
+        from training_losses import causal_token_losses
+        logits = self.lm(inputs_embeds=inputs, **context).logits
+        objective, nll = causal_token_losses(logits, labels, training_loss)
+        return (objective, nll) if return_nll else objective
 
     @torch.no_grad()
     def generate_chain(self, h_ag, chain, max_new_tokens, do_sample, top_p,
@@ -169,8 +222,8 @@ class MangoModel(nn.Module):
                              do_sample, top_p, temperature):
         """Sample several requested chains from one conditioning pair at once.
 
-        All members of a generation batch share the same antigen/chain-type
-        prefix. Expanding that prefix lets Hugging Face perform each decoding
+        All members of a generation batch share the same antigen and chain type.
+        Expanding the prefix and memory lets Hugging Face perform each decoding
         step for the whole batch in one GPU call, which is substantially faster
         than invoking ``generate`` once per design.
         """
@@ -180,6 +233,10 @@ class MangoModel(nn.Module):
             int(batch_size), -1, -1
         ).contiguous()
         self._check_length(seed.shape[1] + int(max_new_tokens))
+        context = self._antigen_context(h_ag, batch_size)
+        if self.uses_fixed_positions:
+            context.update(antigen_prefix_length=h_ag.shape[1],
+                           attention_mask=torch.ones(seed.shape[:2], dtype=torch.long, device=seed.device))
         out = self.lm.generate(
             inputs_embeds=seed,
             max_new_tokens=max_new_tokens,
@@ -189,6 +246,7 @@ class MangoModel(nn.Module):
             eos_token_id=self.vocab[">"],
             pad_token_id=self.vocab["-"],
             bad_words_ids=self.bad_word_ids,  # blocks specials incl. '|' -> residues only
+            **context,
         )
         return [row.tolist() for row in out]
 
@@ -208,6 +266,9 @@ class MangoModel(nn.Module):
 # --- embedding loading -------------------------------------------------------
 def load_embedding(path: str) -> "torch.Tensor":
     """Load a saved embedding as (1, L, H)."""
+    from embedding_store import load_stored_embedding
+    if not Path(path).is_file():
+        return load_stored_embedding(path)
     payload = torch.load(path, map_location="cpu", weights_only=False)
     if str(payload.get("model_name", "")).startswith("pyrosetta_") and payload.get("conditioning_scope") != "antigen_only":
         raise ValueError(f"Unsafe legacy PRE cache; recompute antigen-only embedding: {path}")
@@ -235,5 +296,10 @@ def comparison_cohort(records_csv):
         if clusters.setdefault(cluster, row["split"]) != row["split"]:
             raise ValueError(f"Cluster crosses splits: {cluster}")
     fields = ("id", "split", "ab_ag_cluster", "resolved_H_seq", "resolved_L_seq", "resolved_ag_seq", "antigen_chains", "target_contract")
+    if rows and 'example_target_chains' in rows[0]:
+        from chain_examples import example_chains
+        for row in rows:
+            example_chains(row)
+        fields += ('example_target_chains',)
     canonical = [[row.get(k, "") for k in fields] for row in rows]
     return hashlib.sha256(json.dumps(canonical, separators=(",", ":")).encode()).hexdigest()

@@ -78,6 +78,22 @@ def embedder_label(tag: str) -> str:
     return EMBEDDERS[tag].get("label", tag)
 
 
+def embedding_tag(tag: str) -> str:
+    """A model control may consume an existing representation without copying it."""
+    source = EMBEDDERS[tag].get("embedding_source", tag)
+    if source not in EMBEDDERS or EMBEDDERS[source].get("embedding_source", source) != source:
+        raise ValueError(f"invalid embedding_source {source!r} for {tag!r}")
+    if source != tag:
+        for key in ("method", "size"):
+            if EMBEDDERS[tag].get(key) != EMBEDDERS[source].get(key):
+                raise ValueError(f"embedding_source {source!r} differs in {key} for {tag!r}")
+    return source
+
+
+def model_config_for_tag(tag: str) -> dict:
+    return {**config["model"], **EMBEDDERS[tag].get("model_overrides", {})}
+
+
 def tags_for_method(method: str) -> list:
     """Active tags built by a given method -- used for wildcard constraints.
 
@@ -85,7 +101,8 @@ def tags_for_method(method: str) -> list:
     rule writes the same output pattern, so each rule constrains {embedder} to
     exactly its own tags. That keeps the DAG unambiguous without ruleorder.
     """
-    return [t for t in ACTIVE_EMBEDDERS if embedder_method(t) == method]
+    return [t for t in ACTIVE_EMBEDDERS
+            if embedder_method(t) == method and embedding_tag(t) == t]
 
 
 def method_constraint(method: str) -> str:
@@ -98,7 +115,7 @@ def method_constraint(method: str) -> str:
 
 # --- Embedding paths (train/val/test subfolders, one .pt per id) -------------
 def antigen_emb_dir(tag: str) -> str:
-    return f"{EMB_DIR}/antigen/{tag}"
+    return f"{EMB_DIR}/antigen/{embedding_tag(tag)}"
 
 
 def antigen_emb_config(tag: str) -> str:
@@ -142,7 +159,7 @@ def antigen_embedding_targets(tag: str, splits=None) -> list:
 
 def antigen_embedding_dependencies(tag: str, splits=None) -> list:
     """Declared readiness inputs; GPU mode uses a persistent-model batch marker."""
-    if BATCH_EMBEDDINGS:
+    if BATCH_EMBEDDINGS and embedding_tag(tag) == tag:
         return [antigen_batch_marker(tag)]
     return antigen_embedding_targets(tag, splits)
 
@@ -156,7 +173,7 @@ def experiment_hash(tag: str) -> str:
     of them yields a different run id, and re-running with the same global state
     file reuses the existing one.
     """
-    model_config = dict(config["model"])
+    model_config = model_config_for_tag(tag)
     # Whether Snakemake should rerun a model is execution policy, not part of
     # the scientific model identity.
     model_config.pop("retrain", None)
@@ -170,6 +187,8 @@ def experiment_hash(tag: str) -> str:
         "weights": config["weights"],
         "experiment_seed": config["experiment"]["seed"],
     }
+    if embedding_tag(tag) != tag:
+        payload["embedding_source"] = EMBEDDERS[embedding_tag(tag)]
     blob = json.dumps(payload, sort_keys=True, default=str).encode()
     return hashlib.sha1(blob).hexdigest()[:8]
 

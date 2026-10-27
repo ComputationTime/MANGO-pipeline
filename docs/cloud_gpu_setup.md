@@ -66,7 +66,20 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 | `smoke` / `small` | one-hot, BioPython, ESM2, ESM-IF, ProteinMPNN; Rosetta interface QC after Boltz/Chai | PyRosetta academic/non-commercial eligibility |
 | `study` | all seven implemented embedders, including ESM3 and PyRosetta PRE; Rosetta interface QC | accepted ESM3 terms, `HF_TOKEN`, and PyRosetta eligibility |
 | `esm2-ablation` | ESM2 8M, 35M, and 150M plus the existing 650M evaluation | completed full-study `esm2` 650M `eval.json` |
-| `antigen-controls` | constant-token, record-random-token, mean-pooled ESM2, and within-split shuffled-ESM2 controls | completed ESM2 650M embeddings and `eval.json` |
+| `antigen-controls` | shape-matched constant/random, mean-pooled, shuffled, and cross-attention ESM2 controls | completed ESM2 650M embeddings and `eval.json` |
+| `antigen-length-ablation` | constant, random and token-merged ESM2 at 1 token, ¼L, ½L, ¾L and L | completed ESM2 650M embeddings and `eval.json` |
+| `iglm-baseline` | full IgLM trained from scratch; reference on Figure 9 | completed context-length comparison |
+| `abrank-transfer` | eight AbRank controls followed by matching SAbDab2 fine-tuning; separate figures | prepared, audited CATH-protected cohorts; see [AbRank transfer](abrank_transfer.md) |
+| `asd-transfer` | eight ASD 2.0 controls followed by matching SAbDab2 fine-tuning; separate figures | downloaded ASD and audited family/RIOT pool; see [ASD transfer](asd_transfer.md) |
+| `asd-loss-comparison` | ESM2 normal/cross-attention, CE/focal, with/without ASD pretraining: eight final models | same audited ASD/native cohorts; see [loss comparison](asd_loss_comparison.md) |
+| `asd-prototype` | small HER2-free ASD cohort; same eight ESM2 models, one epoch per stage | existing audited ASD/native cohorts and cached ESM2; see [prototype](asd_prototype.md) |
+| `asd-prototype-iglm` | native-only and ASD-pretrained IgLM controls; combined ten-model plot | completed `asd-prototype`; same cohorts and one epoch per stage |
+| `antigen-diagnostics` | correct/wrong/removed/pooled antigen probes, CDR NLL and cluster uncertainty | completed prototype and matched IgLM; see [diagnostics](antigen_diagnostics.md) |
+| `antigen-diagnostic-training` | eight small position/pooling/continuation/IgLM-adapter follow-ups | completed diagnostic probes and cached ESM2 |
+| `asd-scaling` | ASD-only nested 2k/4k cohorts, IgLM and paired/shuffled cross-attention; optimization controls | audited ASD/native protection inputs and cached ESM2; see [scaling](asd_scaling.md) |
+| `asd-scaling-8k` | add three one-epoch 8k models to the frozen 2k/4k comparison | completed `asd-scaling`; relaxes antigen frequency cap; see [scaling](asd_scaling.md#8000-record-extension) |
+| `asd-scaling-16k` | add 16k IgLM/cross-attention controls and regular MANGO at 2k/4k/8k/16k | completed 8k comparison; dominant-antigen shuffle limit is disclosed; see [scaling](asd_scaling.md#16000-record-extension-and-regular-mango) |
+| `asd-scaling-fixed-positions` | add fixed-position prefix MANGO at 2k/4k/8k/16k | completed 16k/regular comparison; same frozen cohorts and cached ESM2 |
 | `*-esm3` | default set plus ESM3 | accept model terms and set `HF_TOKEN` |
 | `*-pyrosetta` | default set plus PyRosetta PRE | academic/non-commercial eligibility |
 | `*-all` | every implemented embedder above | both requirements |
@@ -167,16 +180,111 @@ MANGO hyperparameters as ESM2 650M:
 ./run_gpu.sh antigen-controls
 ```
 
-The constant control uses one all-zero token for every record. The random
-control uses one deterministic Gaussian token keyed only by record id and seed.
-Neither representation reads antigen sequence, structure, or length. The
+The constant and random controls match the full `[L, 1280]` shape of each
+record's cached ESM2 650M embedding, including its chain-break token count.
+Constant replaces every value with zero; random replaces every value with
+deterministic Gaussian noise keyed only by record id and seed. Both retain
+antigen length through the prefix size, but neither uses ESM2 embedding values,
+antigen sequence values, or antibody data. Missing or incompatible ESM2 shape
+references fail rather than falling back to one token. The
 mean-pooled ESM2 control averages each correctly paired frozen ESM2 tensor to
 one token, isolating antigen information from the long-prefix burden. The
 shuffled control assigns every record a different record's frozen ESM2 650M
 tensor using a fixed-point-free permutation within each data split. This keeps
 real ESM2 values and prefix-length distribution while breaking the correct
-antibody-antigen pairing. The mode writes `fig8_antigen_controls.{png,csv}`
+antibody-antigen pairing. The cross-attention control reads the original,
+correctly paired ESM2 tensors as separate memory at every decoder layer. Its
+decoder prefix contains only the learned H/L selector and BOS, so antigen tokens
+do not consume decoder positions. Decoder width, depth, initialization of shared
+parameters, targets, split, optimizer and stopping settings match the prefix
+baseline. Cross-attention adds parameters; their count and architecture are
+recorded in the model and evaluation metadata and figure data. Lower NLL is an
+experimental outcome, not a consequence guaranteed by the shorter prefix.
+The mode writes `fig8_antigen_controls.{png,csv}`
 under `artifacts/analysis/figures/`.
+
+These controls replace the earlier single-token constant/random configuration.
+Their changed configuration creates new run IDs; existing single-token
+checkpoints and control evaluations must not be treated as shape-matched results.
+The cross-attention control also has its own architecture and run ID and requires
+fresh training. It reuses ESM2 files directly, without copying or re-embedding them.
+
+To compare context size for constant, random and token-merged ESM2 inputs:
+
+```bash
+./run_gpu.sh antigen-length-ablation
+```
+
+This trains/evaluates the constant and random controls at one token and at ¼,
+½, ¾ and all of each record's ESM2 context length, plus ESM2 token merging at
+the same lengths. Load `config/antigen_controls.yaml`
+before `config/antigen_length_ablation.yaml`, then `config/iglm_baseline.yaml`
+for equivalent manual Snakemake runs. Fractions use `max(1, ceil(fraction * L))`; L includes ESM2's chain-break
+tokens. Width stays 1280 and the decoder, targets, cluster split, optimizer,
+training order, seed and early-stopping settings stay common. Fractional random
+contexts are nested prefixes of the same per-record full-length Gaussian tensor.
+The configured one-token random vector also matches its first row. Constant
+contexts contain only zeros. Fractional contexts retain antigen-length information
+through their token count, without using antigen embedding values.
+
+The ESM2 curve uses the correctly paired frozen ESM2 650M values. At each
+fraction, deterministic cosine-similarity bipartite matching merges tokens
+until exactly `max(1, ceil(fraction * L))` remain. Weighted averages carry the
+number of original tokens in each group; output groups retain their earliest
+source position. All source tokens, including chain-break positions, contribute.
+Merging runs on CPU in the existing isolated tensor environment after the
+ordinary ESM2 forward pass, so this reduces decoder context rather than ESM2
+inference cost. Its one-token endpoint reuses `control_pooled_esm2` (the mean of
+all source tokens); its L endpoint reuses the completed ESM2 evaluation. Only
+the three intermediate ESM2 lengths require new models.
+
+Full-length endpoints reuse the existing full-length control run IDs. Every
+variant runs in its own Snakemake invocation, and failures do not prevent the
+remaining lengths from being attempted. Reruns reuse completed outputs; older
+evaluations are refreshed when needed to record context-length statistics.
+
+The strict output is `artifacts/analysis/figures/fig9_antigen_context_length_ablation.png`,
+with exact values in `fig9_antigen_context_length_ablation_data.csv` beside it.
+Separate train and test panels show constant, random and token-merged ESM2 NLL
+across the five context sizes, with full-length ESM2 as a horizontal reference. Values are pooled
+heavy/light target-token NLL from each model's best validation checkpoint,
+including EOS; training curves are not used as training-split evaluations.
+The CSV records actual minimum/mean/maximum context token counts per split,
+cohort fingerprints, run IDs, checkpoint epochs, example/token counts and
+perplexities and the merging algorithm. Older reference evaluations may obtain
+context counts from the matching full-length shape control, recorded in
+`context_lengths_source`; the original reference NLL remains unchanged. A plot
+is produced only when all fifteen compatible curve points exist (fourteen
+control evaluations plus the reused ESM2 reference) and the IgLM evaluation
+is complete. The CSV contains 30 MANGO rows plus two IgLM reference rows.
+
+To add the scratch IgLM reference to an existing context-length comparison:
+
+```bash
+./run_gpu.sh iglm-baseline
+```
+
+This trains the published full IgLM GPT-2 architecture (four layers, eight heads,
+width 512, 512 positions and vocabulary 33; 12,889,600 parameters) from random
+initialization in the existing isolated model environment. It uses no public
+pretrained weights. The full-chain autoregressive objective and the Adam learning
+rate, accumulation, seed, epoch ordering, maximum epochs and validation patience
+come from the same MANGO configuration. VH/VL targets, cluster-separated splits
+and the ordered cohort fingerprint match the existing comparison.
+
+Native IgLM H/L tokens select the chain. A fixed `[HUMAN]` token serves as the
+second start token for every record, since the processed comparison cohort has
+no antibody-species field. This convention adds no per-record species label and
+does not filter the cohort by species. Residues and native `[SEP]` EOS contribute
+to NLL; both control tokens are excluded. This uses full-chain autoregression
+throughout training and evaluation. No infilling task or antibody prompt is used.
+
+The run writes checkpoints, evaluation, live training curves, exact architecture,
+vocabulary, initialization and training settings under
+`artifacts/runs/iglm_scratch__<hash>/`. Figure 9 shows its training/test NLL as
+horizontal dotted lines because IgLM has no antigen context. The existing MANGO
+points are consumed from their completed evaluations. Rerun the same command to
+reuse completed outputs; failures retain the workflow log and return nonzero.
 
 Plain study includes both ESM3 and PyRosetta PRE. Validate both first with:
 

@@ -1,0 +1,16 @@
+# Small, paired diagnostics. Original pilot artifacts remain immutable.
+experiment_root: artifacts/experiments/antigen_conditioning_diagnostics_v1
+mango_root: artifacts/experiments/asd_her2_free_prototype_v1
+iglm_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+cohort_dir: artifacts/experiments/asd_her2_free_prototype_v1/cohort
+seed: 0
+train_probe_records: 96
+wrong_antigen_repeats: 2
+bootstrap_repeats: 2000
+probes:
+  prefix_scratch: {family: mango, phase: sabdab2_scratch, architecture: mango}
+  cross_scratch: {family: mango, phase: sabdab2_scratch, architecture: cross_attention}
+  iglm_scratch: {family: iglm, phase: sabdab2_scratch}
+  prefix_pretrained: {family: mango, phase: sabdab2_finetuned, architecture: mango}
+  cross_pretrained: {family: mango, phase: sabdab2_finetuned, architecture: cross_attention}
+  iglm_pretrained: {family: iglm, phase: sabdab2_finetuned}

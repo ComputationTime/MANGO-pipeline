@@ -1,0 +1,19 @@
+# ASD-only size comparison; no native fine-tuning stages.
+experiment_root: artifacts/experiments/asd_scaling_2k_4k_v2
+prototype_config: config/asd_prototype.yaml
+prototype_root: artifacts/experiments/asd_her2_free_prototype_v1
+iglm_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+sizes: [2000, 4000]
+max_antigen_tokens: 768
+max_records_per_antigen: 10
+seed: 0
+bootstrap_repeats: 2000
+runs:
+  n2000_iglm: {size: 2000, family: iglm, epochs: 1}
+  n2000_cross: {size: 2000, family: cross_attention, epochs: 1}
+  n2000_shuffled: {size: 2000, family: cross_attention, epochs: 1, shuffled: true}
+  n4000_iglm: {size: 4000, family: iglm, epochs: 1}
+  n4000_cross: {size: 4000, family: cross_attention, epochs: 1}
+  n4000_shuffled: {size: 4000, family: cross_attention, epochs: 1, shuffled: true}
+  n2000_iglm_2ep: {size: 2000, family: iglm, epochs: 2}
+  n2000_cross_2ep: {size: 2000, family: cross_attention, epochs: 2}

@@ -18,6 +18,7 @@ class AntigenControlPlotTests(unittest.TestCase):
             "control_random",
             "control_pooled_esm2",
             "control_shuffled",
+            "control_cross_attention_esm2",
             "esm2",
         ]
         labels = {
@@ -25,6 +26,7 @@ class AntigenControlPlotTests(unittest.TestCase):
             "control_random": "Random (no antigen)",
             "control_pooled_esm2": "Mean-pooled ESM2",
             "control_shuffled": "Shuffled ESM2",
+            "control_cross_attention_esm2": "Cross-attention ESM2",
             "esm2": "ESM2",
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -37,6 +39,8 @@ class AntigenControlPlotTests(unittest.TestCase):
                     "run_id": f"{tag}__run",
                     "checkpoint_epoch": index,
                     "d_ag": 1280,
+                    "architecture": "cross" if tag == "control_cross_attention_esm2" else "prefix",
+                    "antigen_in_decoder_prefix": tag != "control_cross_attention_esm2",
                     "splits": {
                         "train": {
                             "nll": 0.3 + index / 100,
@@ -63,6 +67,8 @@ class AntigenControlPlotTests(unittest.TestCase):
             self.assertEqual(len(rows), 1 + 2 * len(tags))
             self.assertIn("control_shuffled", data.read_text())
             self.assertIn("ESM2", data.read_text())
+            self.assertIn("control_cross_attention_esm2", data.read_text())
+            self.assertIn("antigen_in_decoder_prefix", rows[0])
 
 
 if __name__ == "__main__":
