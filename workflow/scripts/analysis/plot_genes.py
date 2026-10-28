@@ -112,23 +112,27 @@ def plot_all_embedder_genes(
         if col not in df.columns:
             raise ValueError(f"The CSV must contain the column {col!r}.")
 
-    def club_v_family(gene):
+    def club_family(gene, segment):
+        """Return the IMGT family, such as IGHV3 from IGHV3-23*01.
+
+        The locus letter is kept. Heavy, kappa, and lambda calls must not
+        collapse into one IGV or IGJ bucket.
+        """
         if pd.isna(gene):
             return None
-        gene_str = str(gene).upper()
-        match = re.search(r"V(\d+)", gene_str)
-        if match:
-            return f"IGV{match.group(1)}"
-        return None
+        match = re.match(
+            rf"(IG[HKL]{segment})(\d+)",
+            str(gene).upper().split("*", 1)[0],
+        )
+        if match is None:
+            return None
+        return f"{match.group(1)}{match.group(2)}"
+
+    def club_v_family(gene):
+        return club_family(gene, "V")
 
     def club_j_family(gene):
-        if pd.isna(gene):
-            return None
-        gene_str = str(gene).upper()
-        match = re.search(r"J(\d+)", gene_str)
-        if match:
-            return f"IGJ{match.group(1)}"
-        return None
+        return club_family(gene, "J")
 
     df["v_family"] = df["v_gene"].apply(club_v_family)
     df["j_family"] = df["j_gene"].apply(club_j_family)
