@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+pyrosetta_pre,pyrosetta_pre__f53020ee,pdb_00009d3j_E_F,1,VWEPILESTQEFVGIGQQQEWDQFAGISPS,chai,0,0.3526330590248108,0.6873259544372559,0.26895982027053833,0.8278622627258301,9.552877426147461,False,artifacts/analysis/pyrosetta_pre__f53020ee/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,ok

@@ -1,0 +1,21 @@
+{
+  "architecture": "antigen_chain_gpt2_v2",
+  "chain_selector_trainable_parameters": 960,
+  "d_ag": 21,
+  "d_model": 480,
+  "decoder_trainable_parameters": 12080640,
+  "embedder": "one_hot",
+  "experiment_hash": "99452953",
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "projection_trainable_parameters": 10560,
+  "run_id": "one_hot__99452953",
+  "target_chains": [
+    "heavy",
+    "light"
+  ],
+  "task": "antigen+chain_type->chain",
+  "trainable_parameters": 12092160,
+  "vocab_size": 26
+}

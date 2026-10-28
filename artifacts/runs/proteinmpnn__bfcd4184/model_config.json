@@ -1,0 +1,25 @@
+{
+  "architecture": "antigen_chain_gpt2_v3",
+  "chain_selector_trainable_parameters": 976,
+  "cohort_sha256": "3d5a5a0e8765632032a546df8a1280e44f5b6db3a3051c619f524e8fcded072b",
+  "d_ag": 128,
+  "d_model": 488,
+  "decoder_trainable_parameters": 12469376,
+  "embedder": "proteinmpnn",
+  "experiment_hash": "bfcd4184",
+  "iglm_reference_parameters": 12889600,
+  "loss_reduction": "target_token_mean_including_eos",
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "projection_trainable_parameters": 62952,
+  "run_id": "proteinmpnn__bfcd4184",
+  "target_chains": [
+    "heavy",
+    "light"
+  ],
+  "target_contract": "imgt_variable_vh_vl_v1",
+  "task": "antigen+chain_type->chain",
+  "trainable_parameters": 12533304,
+  "vocab_size": 26
+}

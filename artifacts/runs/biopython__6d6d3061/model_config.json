@@ -1,0 +1,17 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "architecture": "antigen_prefix_gpt2_v1",
+  "d_ag": 11,
+  "d_model": 480,
+  "decoder_trainable_parameters": 12080640,
+  "embedder": "biopython",
+  "experiment_hash": "6d6d3061",
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "projection_trainable_parameters": 5760,
+  "run_id": "biopython__6d6d3061",
+  "task": "antigen+light->heavy",
+  "trainable_parameters": 12086400,
+  "vocab_size": 26
+}

@@ -13,7 +13,7 @@
 <li>The fetch rule downloads the pinned SAbDab2 archive and writes a readiness marker only after the expected split table exists.</li>
 <li>The standardizer converts SAbDab2-specific columns into stable names such as <code>id</code>, <code>pdb_path</code>, expected sequences, chain identifiers, cluster, and source split.</li>
 <li>The processing checkpoint filters invalid records, resolves sequences from metadata/structure, assigns entire clusters to train, validation, or test, and writes <code>records.csv</code>.</li>
-<li>For every kept identifier, an antigen embedder writes a tensor. Separately, AbLang2 writes a light-only context tensor. Both are indexed by split and record identifier.</li>
+<li>For every kept identifier, the active antigen embedder writes one tensor indexed by split and record identifier. No antibody-context tensor is created.</li>
 <li>The training script loads both tensors, shifts the known heavy sequence into next-token training targets, and optimizes one model for that antigen representation.</li>
 <li>Evaluation measures likelihood on train, validation, and test. Prediction reconstructs a heavy chain for test records. Generation samples multiple heavy chains for a diverse target set drawn from held-out clusters.</li>
 <li>Analysis selects the same deterministic number of successful designs per target and model, applies independent scorers, and produces figures plus the exact CSV rows behind each figure.</li>

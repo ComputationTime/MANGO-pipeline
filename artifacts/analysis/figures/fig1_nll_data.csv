@@ -1,0 +1,15 @@
+embedder,split,nll,perplexity,n_examples,n_tokens,chain_scope,loss_reduction
+one_hot,train,2.801677249006991,16.472251682247673,6,694,heavy + light,target_token_mean_including_eos
+one_hot,test,2.9305294337479966,18.73754816141941,2,230,heavy + light,target_token_mean_including_eos
+biopython,train,2.8182820617637305,16.74805382157373,6,694,heavy + light,target_token_mean_including_eos
+biopython,test,2.9251887663550997,18.637743896845674,2,230,heavy + light,target_token_mean_including_eos
+pyrosetta_pre,train,2.7890055062791457,16.264836478267057,6,694,heavy + light,target_token_mean_including_eos
+pyrosetta_pre,test,2.9176375254340794,18.497535841096123,2,230,heavy + light,target_token_mean_including_eos
+esm2,train,2.828897441842027,16.92678776442732,6,694,heavy + light,target_token_mean_including_eos
+esm2,test,2.983656201155289,19.75993101471123,2,230,heavy + light,target_token_mean_including_eos
+esm3,train,2.8240753645855685,16.84536196465108,6,694,heavy + light,target_token_mean_including_eos
+esm3,test,2.9335348637207694,18.79394725959749,2,230,heavy + light,target_token_mean_including_eos
+esmif,train,2.7128581907975913,15.07229349936478,6,694,heavy + light,target_token_mean_including_eos
+esmif,test,2.8903772364492,18.000098614224772,2,230,heavy + light,target_token_mean_including_eos
+proteinmpnn,train,2.833354468304417,17.00239928151383,6,694,heavy + light,target_token_mean_including_eos
+proteinmpnn,test,2.9474502065907355,19.057299548750986,2,230,heavy + light,target_token_mean_including_eos

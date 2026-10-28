@@ -75,16 +75,6 @@ embedding:
   #   expected -> full PDB-annotated sequence including unresolved residues
   seq_source: "resolved"
   splits: ["train", "val", "test"]
-  # Antibody side is held CONSTANT across the study -- that is the whole point.
-  antibody:
-    method: "ablang2"
-    # THE TASK: given the antigen and the LIGHT chain, predict the HEAVY chain.
-    # The antibody context embedding therefore encodes the light chain with the
-    # heavy slot masked ('*|L' in AbLang2). The heavy chain never enters the
-    # conditioning signal at any stage -- train, evaluate, predict or generate.
-    # "light_only" is the only supported value; it is spelled out here (and in
-    # the directory name) so the no-leak guarantee is visible, not implicit.
-    context: "light_only"
 
 # --- THE EXPERIMENTAL AXIS: 8 antigen representations ------------------------
 # Each key is an embedder TAG: the directory name, the run name, and the label
@@ -107,6 +97,7 @@ embedders:
     method: pyrosetta_pre
     class: biophysical
     label: "PyRosetta PRE"
+    conditioning_scope: antigen_only_v1
     score_function: "ref2015"
     normalize: "zscore"
     add_chain_breaks: true
@@ -144,13 +135,8 @@ embedders:
     class: learned
     label: "AF-M"
     representation: "single"        # single | pair | structure
-    # AF-M is folded on exactly the conditioning information the model gets:
-    # the antigen chains PLUS the light chain. The heavy chain is never given
-    # to AF-M, so its representation cannot leak the prediction target.
-    # Consequence: this is the one embedder whose L spans more than the antigen
-    # (L = antigen residues + light residues + separators). Cross-attention does
-    # not require a common L, but keep it in mind when comparing lengths.
-    include_light_chain: true
+    # Deferred AF-M must follow the same antigen-only input contract.
+    conditioning_scope: antigen_only_v1
 
 # First milestone: prove the complete train/inference path with the simplest
 # antigen representation. Additional embedders remain registered above but are
@@ -161,9 +147,10 @@ active_embedders:
 # --- Model (identical for every embedder; only d_Ag_rep differs) -------------
 model:
   # Architecture follows IgLM's format per the grant: 4 layers, 8 heads (~13M).
-  # Vocab/hidden size come from mango.utils.mango_utils.MANGO_configs.
-  n_cross_attn_heads: 1
-  n_cross_attn_layers: 1
+  # Antigen tokens are projected into GPT-2 and followed by a learned H/L
+  # output selector. No antibody sequence or embedding is a model input.
+  architecture: antigen_chain_gpt2_v3
+  target_chains: [heavy, light]
   epochs: 10
   lr: 1.0e-4
   patience: 2                       # early-stop patience on val loss
@@ -173,7 +160,7 @@ model:
   loss_plot_interval: 250
   seed: 0
   # Reproducibly reshuffle every epoch using seed + epoch. Validation remains
-  # fixed-order, and each training structure is visited exactly once per epoch.
+  # fixed-order, and each configured chain target is visited once per epoch.
   shuffle_train: true
   train_splits: ["train"]
   val_splits: ["val"]               # early stopping watches this; never test
@@ -186,8 +173,9 @@ model:
 generation:
   # Which embedded dataset split generation designs against. External
   # therapeutic targets are deferred from the first milestone.
-  # Every design is a HEAVY chain conditioned on that structure's antigen
-  # embedding plus its light chain, so the source must supply both.
+  # The antigen embedding is the only biological conditioning input. The
+  # selector below chooses which antibody chain the decoder should emit.
+  chain: heavy                       # heavy/H or light/L
   source: "test"
   # Use one deterministic representative from every held-out test cluster.
   # Selection fails if a chosen cluster occurs in train or validation. This
@@ -200,7 +188,7 @@ generation:
   # Spread the generation budget across the broad target set.
   n_per_target: 100
 
-  # Sampling. Only heavy chains are ever generated -- that is the task.
+  # Sampling. Downstream design analyses currently require heavy-chain output.
   # SAbDab2's IMGT-numberable VH targets currently span up to 171 aa. Leave
   # room for the longest observed VH plus EOS so ceiling hits are not mistaken
   # for learned termination.
@@ -208,12 +196,6 @@ generation:
   do_sample: true
   top_p: 1.0
   temperature: 1.0
-  # Antigen-agnostic control model (grant Aim 2): IgLM prompted with the first
-  # 5 amino acids of each known binder.
-  controls:
-    iglm:
-      enabled: false
-      prompt_prefix_len: 5
 
 # --- Structure confidence for generated complexes ---------------------------
 structure_prediction:

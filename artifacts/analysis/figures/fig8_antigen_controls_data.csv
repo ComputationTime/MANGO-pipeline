@@ -1,0 +1,11 @@
+embedder,label,run_id,checkpoint_epoch,embedding_width,split,nll,perplexity,n_examples,n_tokens
+control_constant,Constant (no antigen),control_constant__760bc848,6,1280,train,0.26171055429427403,1.2991504544833448,5272,610316
+control_constant,Constant (no antigen),control_constant__760bc848,6,1280,test,0.8030193548736827,2.2322707811354534,852,98684
+control_random,Random (no antigen),control_random__dac6fb46,4,1280,train,0.30019151889074797,1.3501173557951403,5272,610316
+control_random,Random (no antigen),control_random__dac6fb46,4,1280,test,0.8325949770765252,2.299277578004149,852,98684
+control_pooled_esm2,Mean-pooled ESM2,control_pooled_esm2__c88a5373,2,1280,train,0.3809907074247417,1.4637340034881448,5272,610316
+control_pooled_esm2,Mean-pooled ESM2,control_pooled_esm2__c88a5373,2,1280,test,0.8523569374247962,2.3451677568099822,852,98684
+control_shuffled,Shuffled ESM2,control_shuffled__5c69acfe,6,1280,train,0.31323123177198486,1.3678377820166814,5272,610316
+control_shuffled,Shuffled ESM2,control_shuffled__5c69acfe,6,1280,test,0.8708313333893544,2.388895997258028,852,98684
+esm2,ESM2,esm2__c49369e9,5,1280,train,0.3069184605852671,1.3592301327238077,5272,610316
+esm2,ESM2,esm2__c49369e9,5,1280,test,0.9141999194513659,2.4947784295074262,852,98684

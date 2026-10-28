@@ -27,6 +27,7 @@ class SAbDab2StandardizerTests(unittest.TestCase):
                         "Lseq_expected": "LIGHT",
                         "agexpectedseqs": "ANTIGEN",
                         "VH_numerable_seq": "EVQLVESGGG",
+                        "VL_numerable_seq": "DIQMTQ",
                         "Hseq": "FULLHEAVYRESOLVED",
                         "Lseq": "LIGHT",
                         "agresolvedseqs": "ANTIGEN",
@@ -39,6 +40,9 @@ class SAbDab2StandardizerTests(unittest.TestCase):
                 str(source), str(root), "ab_ag_split", str(output)
             )
             row = result.iloc[0]
+            self.assertEqual(row["expected_light_seq"], "DIQMTQ")
+            self.assertEqual(row["resolved_L_seq"], "DIQMTQ")
+            self.assertEqual(row["source_resolved_full_light_seq"], "LIGHT")
             self.assertEqual(row["expected_heavy_seq"], "EVQLVESGGG")
             self.assertEqual(row["resolved_H_seq"], "EVQLVESGGG")
             self.assertEqual(

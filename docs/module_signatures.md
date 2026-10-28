@@ -13,7 +13,7 @@ open decisions.
 
 ## The task
 
-**Given the antigen and the light chain, predict the heavy chain.**
+**Given the antigen and a requested chain type, generate that antibody chain.**
 
 Every module honours that one sentence, and it is what makes the study's
 comparison meaningful — the antigen representation is the only thing that
@@ -21,20 +21,14 @@ varies, so it is the only thing that can explain a difference between models.
 
 | | |
 |---|---|
-| conditioning | antigen embedding (`<tag>`) + light-chain context embedding |
-| target | heavy chain |
-| never an input | the heavy chain, at any stage |
+| conditioning | antigen embedding (`<tag>`) + learned heavy/light output selector |
+| target | configured heavy or light chain |
+| never an input | any antibody sequence or antibody-derived embedding |
 
-The no-leak guarantee is **structural, not procedural**: the antibody context
-embedding is built by running AbLang2 on `'*|L'` — the light chain with the
-heavy slot masked — so the heavy chain is absent from every artifact the model
-reads. No stage has to remember to hide it. The context directory is named
-`ablang2_light_only` for the same reason: embeddings built under a different
-task cannot be silently reused.
-
-Loss is computed on heavy tokens only (the context block is labelled `-100`),
-so every reported NLL is a heavy-chain NLL, undiluted by antigen or light-chain
-length.
+The no-leak guarantee is structural: model rules declare antigen tensors only,
+and the model API has no antibody-context argument. Loss is computed on target
+residues plus EOS; projected antigen tokens, the selector, and BOS are labelled
+`-100`.
 
 Conventions used below:
 
@@ -57,7 +51,7 @@ Conventions used below:
 | `experiment` | study name, global seed |
 | `dataset` | which dataset + version + URL, artifact root, split table/column |
 | `processing` | filters, validation-split strategy |
-| `embedding` | `seq_source` (resolved\|expected), splits to embed, antibody method + `context` |
+| `embedding` | `seq_source` (resolved\|expected), splits to embed |
 | `embedders` | **the 8 antigen representations** — registry of tags |
 | `active_embedders` | which tags this invocation runs |
 | `model` | architecture, training hyperparameters, retrain gating |
@@ -80,7 +74,7 @@ embedders:
     model: vanilla_models                   # proteinmpnn
     noise: 2                                # proteinmpnn
     representation: single                  # afm
-    include_light_chain: true               # afm
+    conditioning_scope: antigen_only_v1     # afm / PRE audit marker
 ```
 
 `method` chooses the rule; everything else is passed to the script as
@@ -219,29 +213,10 @@ records.csv (+ structure file for structure-based methods)
 
 | | |
 |---|---|
-| rules | `embed_antigen_<method>` · aliases `embed_antigen`, `embed_antibody`, `embed` |
+| rules | `embed_antigen_<method>` · aliases `embed_antigen`, `embed` |
 | scripts | `embed_antigen_<method>.py` |
 | wildcards | `{embedder}` (constrained per method), `{split}`, `{instance}` |
 | env | one per method — heavy/conflicting deps stay isolated |
-
-### Antibody context embedder
-
-The antibody side is **held constant** across the study — that is what makes any
-difference between models attributable to the antigen representation:
-
-```
-records.csv → embeddings/antibody/ablang2_light_only/{train,val,test,target}/<id>.pt
-```
-
-What is embedded is the **light chain with the heavy slot masked**: AbLang2 is
-run on `'*|L'`, never `'H|L'`. This is the study's no-leak guarantee, and it
-lives here rather than in the model so that no downstream stage can undo it. The
-context is part of the directory name, so a change of task cannot silently reuse
-embeddings built under the old one. Its meta carries `chains: ["L"]`,
-`context: "light_only"`, `masked_chains: ["H"]`.
-
-`m` (the context length) = `len(light) + 2` — the mask token, the `|`
-separator, and one row per light-chain residue.
 
 ### `.pt` payload
 
@@ -285,24 +260,15 @@ embedded and can be regenerated without the embedder's heavy environment.
 | `esm3` | sequence | resolved/expected seq | 1536 |
 | `esmif` | structure | `.cif` | 512 |
 | `proteinmpnn` | structure | `.cif` + weights | 128 |
-| `afm` | sequence → predicted | antigen seq **+ light chain** | representation-dependent |
+| `afm` | sequence → predicted | antigen sequence only | representation-dependent |
 
 `L` convention: sequence methods emit one row per residue plus one
 chain-separator row between chains, so `L = Σ chain_len + (n_chains − 1)`.
 The adapted ESM-IF and configured PyRosetta PRE methods also insert a separator
 row between chains; ProteinMPNN emits backbone-complete residues without one.
 
-One deliberate exception:
-
-- `afm` — folded on the antigen chains **plus the light chain**, so
-  `L = Σ ag_chain_len + len(light) + n_chains − 1`. AF-M's value over a
-  sequence model is that it models the interface; folding the antigen alone
-  would make it a strictly worse ESM2. The light chain is inside the
-  conditioning set, and the heavy chain is never given to AF-M, so this cannot
-  leak the target. Cross-attention imposes no constraint on `L` (the antigen is
-  keys/values), but do not read this `L` as comparable to the other seven.
-  `embed_antigen_afm.build_fold_input` assembles and validates the chain dict —
-  that part is implemented and testable without any AF infrastructure.
+AF-M follows the same antigen-only chain assembly as every other representation.
+It remains deferred pending weights, MSA strategy, and execution infrastructure.
 
 ---
 
@@ -329,23 +295,17 @@ The targets table uses the **same schema as `records.csv`** with
 unchanged — their embeddings land at
 `embeddings/antigen/<tag>/target/<PDB>.pt` beside the train/val/test folders.
 
-Each entry needs **both** `antigen_chains` and `light_chain` — the model
-conditions on the antigen and the light chain, so both must be named. No heavy
-chain is ever recorded: `resolved_H_seq` is deliberately empty, because that is
-what the model predicts.
-
-`standardize_targets` **refuses to guess** either field: a null value, a chain
-absent from the structure, or a `light_chain` that is also listed as an antigen
-chain is a hard error listing every chain found, with its length and sequence.
-Conditioning on the wrong chain — the Fab instead of the antigen, or the heavy
-chain we are meant to predict — would silently invalidate every design.
+Each entry requires `antigen_chains`. An optional recorded partner chain may be
+kept for downstream complex scoring, but it is not embedded or passed to MANGO.
+`standardize_targets` refuses to guess antigen chains and reports every chain
+found when the annotation is missing or invalid.
 
 ---
 
 ## 6. MANGO train module
 
 ```
-records.csv + embeddings/antigen/<tag>/… + embeddings/antibody/ablang2_light_only/…
+records.csv + embeddings/antigen/<tag>/…
   → artifacts/runs/<run>/
 ```
 
@@ -358,24 +318,20 @@ records.csv + embeddings/antigen/<tag>/… + embeddings/antibody/ablang2_light_o
 
 ### Sequence layout (`model_common.MangoModel`)
 
-Teacher-forced causal LM over the heavy chain:
+Teacher-forced causal LM over the requested target chain:
 
 ```
-positions: [ ctx_0 … ctx_{m-1} ]  [ < ]  [ h_1 … h_n ]  [ > ]
-            antigen-conditioned   start   heavy chain    end
-            light-chain context          (teacher-forced)
+positions: [ ag_0 … ag_{m-1} ] [selector] [ < ] [ t_1 … t_n ] [ > ]
+            projected antigen    H or L    start target chain   end
 
-labels:     -100 × (m+1)                  h_1 … h_n       >
+labels:     -100 × (m+2)                         t_1 … t_n  >
 ```
 
-- `ctx` = the light-chain context embedding cross-attended against the antigen
-  embedding (`fuse`), dim 480 = MANGO's hidden size.
-- Heavy tokens enter through GPT2's own `wte`, so each heavy position sees only
-  earlier heavy positions — the causal mask does the work.
-- Labels are `-100` across the whole context block, so loss covers exactly
-  `len(H) + 1` tokens (residues + end token) and nothing else.
-- Generation reuses this identical prefix (`ctx` + `<`), so what is sampled is
-  exactly what was trained.
+- Antigen rows are linearly projected to the decoder width.
+- The learned selector requests heavy or light output without supplying sequence.
+- Target tokens enter through GPT-2's `wte`, preserving causal teacher forcing.
+- Labels are `-100` across antigen, selector, and BOS; loss covers target
+  residues plus EOS only. Generation reuses the identical prefix.
 
 ### Run directory
 
@@ -393,10 +349,10 @@ labels:     -100 × (m+1)                  h_1 … h_n       >
 
 ```json
 { "run_id": …, "experiment_hash": …, "embedder": …,
-  "antibody_embedder": "ablang2_light_only",
-  "task": "antigen+light->heavy",
-  "d_ag": 21, "d_model": 480,
-  "n_cross_attn_heads": 1, "n_cross_attn_layers": 1,
+  "task": "antigen+chain_type->chain",
+  "target_chains": ["heavy", "light"],
+  "d_ag": 21, "d_model": 488,
+  "architecture": "antigen_chain_gpt2_v3",
   "vocab_size": 26, "n_layer": 4, "n_head": 8, "n_positions": 2048 }
 ```
 
@@ -406,9 +362,9 @@ hidden dim is impossible.
 ### Checkpoint payload
 
 ```python
-{ "cross_attn": state_dict, "lm": state_dict, "optimizer": state_dict,
-  "d_ag": int, "n_heads": int, "n_layers": int,
-  "embedder": str, "antibody_embedder": str,
+{ "antigen_projection": state_dict, "chain_embedding": state_dict,
+  "lm": state_dict, "optimizer": state_dict, "target_chains": list,
+  "d_ag": int, "architecture": str, "embedder": str,
   "run_id": str, "experiment_hash": str, "val_loss": float, "epoch": int }
 ```
 
@@ -434,7 +390,7 @@ records.csv + checkpoints/best.pt + model_config.json
 
 ```json
 { "run_id": …, "experiment_hash": …, "embedder": …,
-  "task": "antigen+light->heavy", "d_ag": …,
+  "task": "antigen+chain_type->chain", "d_ag": …,
   "checkpoint_epoch": …, "checkpoint_val_loss": …,
   "splits": { "train": { "nll": …, "perplexity": …, "n_tokens": …,
                          "n_examples": …, "n_skipped_missing_embeddings": … },
@@ -443,14 +399,13 @@ records.csv + checkpoints/best.pt + model_config.json
 
 NLL is **token-weighted** (total cross-entropy ÷ predicted tokens), so it is
 insensitive to a split's length distribution and bars are comparable. Predicted
-tokens are the heavy chain plus its end token — `n_tokens = Σ (len(H) + 1)` —
-so figure 1 compares heavy-chain NLLs, not a number diluted by how long the
-antigens happened to be.
+tokens are target residues plus EOS. Results include per-chain breakdowns and a
+pooled token-weighted value; antigen length never contributes to NLL.
 
 ### 7b. Predict — test-split reconstruction
 
 ```
-records.csv + best.pt + antigen embeddings (test) + context embeddings (test)
+records.csv + best.pt + antigen embeddings (test)
   → runs/<run>/predictions_test.csv
 ```
 
@@ -460,21 +415,19 @@ records.csv + best.pt + antigen embeddings (test) + context embeddings (test)
 | script | `predict_mango.py` |
 
 ```
-embedder, run_id, status, split, id, pdb_path, antigen_chains,
-light_seq, true_heavy_seq, predicted_heavy_seq, prediction_length, checkpoint
+embedder, run_id, status, split, id, pdb_path, antigen_chains, chain_type,
+true_sequence, predicted_sequence, prediction_length, checkpoint
 ```
 
-Conditioned on the antigen embedding and the light-chain context — the model's
-full and only input. `true_heavy_seq` is carried for comparison; it is never
-fed to the model, and the context embedding was built with the heavy slot
-masked. A per-structure failure is recorded in `status`, not raised.
+The antigen embedding is the only biological conditioning input. The selected
+reference sequence is carried for comparison only. A per-structure failure is
+recorded in `status`, not raised.
 
 ### 7c. Generate — Aim 2 de novo designs
 
 ```
 best.pt + model_config.json + records for generation.source
   + embeddings/antigen/<tag>/<source>/<id>.pt
-  + embeddings/antibody/ablang2_light_only/<source>/<id>.pt
   → artifacts/designs/<run>/<id>/designs.csv
 ```
 
@@ -485,18 +438,16 @@ best.pt + model_config.json + records for generation.source
 | wildcards | `{run}`, `{instance}` |
 
 ```
-embedder, run_id, target_id, split, design_index, sequence, length, status
+embedder, run_id, target_id, split, design_index, chain_type, sequence, length, status
 ```
 
-`generation.n_per_target` heavy chains per structure. Only heavy chains are
-ever generated — that is the task. One job per `(run, structure)` so the
-pipeline's most expensive step parallelises and one bad target does not cost
-the whole sweep.
+`generation.n_per_target` selected chains per structure. `generation.chain`
+chooses heavy or light; heavy remains the downstream-analysis default. One job
+per `(run, structure)` keeps failures isolated.
 
 **Which structures**: `generation.source` names a split — `test` (current) uses
 held-out dataset complexes, `target` uses the therapeutic panel of §5. Either
-source must supply both an antigen and a light chain, since that pair is the
-entire conditioning signal. For dataset splits, `generation.target_selection`
+source must supply an antigen. For dataset splits, `generation.target_selection`
 selects one deterministic representative per held-out `ab_ag_cluster` and fails
 if a selected cluster occurs in train or validation. `generation.max_targets`
 can optionally cap that already-diversified cohort.
@@ -526,9 +477,10 @@ designs/<run>/*/designs.csv
 | scripts | independent scripts under `workflow/scripts/analysis/` |
 
 The cohort is a deterministic per-target subset of successful designs, selected
-from `(seed, target_id, design_index)` and joined to its light-chain context.
-Figure 3 uses IgLM mean log likelihood, AntiBERTy mean pseudo-log-likelihood,
-and AbLang2 paired H|L confidence. Figure 4 records ANARCI's nearest heavy V/J
+from `(seed, target_id, design_index)`. A recorded reference partner is joined
+only for independent paired scoring and complex prediction; it is never supplied
+to MANGO. Figure 3 uses IgLM mean log likelihood, AntiBERTy mean pseudo-log-
+likelihood, and AbLang2 paired H|L confidence. Figure 4 records ANARCI's nearest heavy V/J
 calls, reconstructed germline reference, raw LD, and normalized LD. Figure 5
 records GRAVY and charge at pH 7.4.
 
@@ -620,7 +572,7 @@ snakemake --sdm conda --cores 8 <target>
 | `fetch` | raw dataset + marker |
 | `standardize` | `standardized.csv` |
 | `process` | `records.csv` |
-| `embed_antigen` / `embed_antibody` / `embed` | embeddings for active tags |
+| `embed_antigen` / `embed` | antigen embeddings for active tags |
 | `train` / `evaluate` / `predict` / `generate` | per active tag |
 | `inference` | evaluation plus held-out predictions per active tag |
 | `analysis_metrics` | deterministic cohort plus all sequence metric tables |

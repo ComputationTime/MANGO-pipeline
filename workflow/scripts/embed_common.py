@@ -29,15 +29,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SEP = ","
 
-# AbLang2's mask symbol. Standing in for the heavy chain is what makes the
-# antibody context leak-free: the model conditions on the light chain and the
-# antigen, and predicts the heavy chain.
-MASK = "*"
-
-# seq_source -> (heavy column, light column, antigen column)
+# seq_source -> antigen sequence column
 _SEQ_COLUMNS = {
-    "resolved": ("resolved_H_seq", "resolved_L_seq", "resolved_ag_seq"),
-    "expected": ("expected_heavy_seq", "expected_light_seq", "expected_ag_seq"),
+    "resolved": "resolved_ag_seq",
+    "expected": "expected_ag_seq",
 }
 
 
@@ -61,7 +56,7 @@ def _columns(seq_source: str):
 
 def antigen_sequences(row: dict, seq_source: str) -> dict:
     """Ordered {chain_id: sequence} for the antigen chains of this record."""
-    _, _, ag_col = _columns(seq_source)
+    ag_col = _columns(seq_source)
     chains = [c for c in row["antigen_chains"].split(SEP) if c]
     seqs = row[ag_col].split(SEP)
     if len(chains) != len(seqs):
@@ -70,40 +65,6 @@ def antigen_sequences(row: dict, seq_source: str) -> dict:
             f"in column {ag_col}"
         )
     return dict(zip(chains, seqs))
-
-
-def antibody_sequences(row: dict, seq_source: str) -> tuple:
-    """(heavy, light) sequences for this record ('' if a chain is absent).
-
-    The HEAVY sequence returned here is the prediction TARGET. It may be used to
-    build training labels; it must never reach an embedder that feeds the model.
-    Use ``antibody_context_sequences`` for anything the model conditions on.
-    """
-    h_col, l_col, _ = _columns(seq_source)
-    return row[h_col], row[l_col]
-
-
-def light_sequence(row: dict, seq_source: str) -> str:
-    """The light chain -- the only antibody chain the model is allowed to see."""
-    _, l_col, _ = _columns(seq_source)
-    light = row[l_col]
-    if not light:
-        raise ValueError(
-            f"{row['id']}: no light chain in column {l_col}. The model conditions "
-            "on the antigen and the light chain, so a record without a light "
-            "chain cannot be embedded -- set processing.require_paired: true."
-        )
-    return light
-
-
-def antibody_context_sequences(row: dict, seq_source: str) -> tuple:
-    """(heavy_slot, light) for AbLang2, with the heavy slot MASKED.
-
-    Returns ``('*', light)``: AbLang2 sees a masked heavy chain that absorbs
-    antigen/light context, so the resulting embedding encodes what the model is
-    given, never what it must predict.
-    """
-    return MASK, light_sequence(row, seq_source)
 
 
 # --- output ------------------------------------------------------------------
@@ -166,7 +127,7 @@ def write_embedder_config(path: str, tag: str, spec: dict, seq_source: str, **ex
 def import_mango_mpnn():
     """Import mango.utils.MPNN_* modules WITHOUT executing mango/__init__.py.
 
-    mango/__init__.py imports the full model stack (esm, ablang2, pyrosetta),
+    mango/__init__.py imports the legacy model stack and optional embedders,
     which we must not require in the minimal ProteinMPNN env. We pre-register
     lightweight stub packages for ``mango`` and ``mango.utils`` pointing at the
     real source dirs, so importing the MPNN submodules resolves their absolute

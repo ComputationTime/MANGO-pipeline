@@ -1,0 +1,1 @@
+{"epoch": 0, "iteration": 3, "train_loss": 3.202695449193319, "val_loss": 2.9346728324890137, "train_order_seed": 0, "train_shuffled": true, "embedder": "esm2", "run_id": "esm2__cf226310", "improved": true}

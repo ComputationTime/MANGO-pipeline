@@ -21,3 +21,13 @@ review/smoke_artifacts/figures/
 review/smoke_artifacts/logs/
 review/smoke_artifacts/manifest.json
 review/smoke_artifacts/summary/
+
+# Local full-study review index uses symlinks into ignored canonical artifacts.
+# The self-contained lightweight export under github/ is tracked separately.
+review/full_v2_artifacts/.mango_review_bundle
+review/full_v2_artifacts/README.md
+review/full_v2_artifacts/embedders/
+review/full_v2_artifacts/figure_data/
+review/full_v2_artifacts/figures/
+review/full_v2_artifacts/manifest.json
+review/full_v2_artifacts/summary/

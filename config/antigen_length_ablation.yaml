@@ -1,0 +1,119 @@
+# Load after config/antigen_controls.yaml. Full-length endpoints reuse its
+# control_constant/control_random definitions and run IDs. All models use the
+# same 1280-wide input, prefix decoder, cohort, seed and training settings.
+# ESM2 token merging reuses mean pooling at one token and original ESM2 at L.
+embedders:
+  control_constant_l1: &fixed
+    method: antigen_control
+    class: control
+    label: "Constant (1 token)"
+    mode: constant
+    width: 1280
+    tokens: 1
+    seed: 0
+    conditioning_scope: no_antigen_fixed_token_v1
+
+  control_constant_l25: &fractional
+    method: antigen_control
+    class: control
+    label: "Constant (1/4 L)"
+    mode: constant
+    width: 1280
+    shape_mode: match_source
+    source_embedder: esm2
+    source_model_name: esm2_t33_650M_UR50D
+    source_dir: "artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
+    length_fraction: 0.25
+    seed: 0
+    conditioning_scope: no_antigen_values_source_length_fraction_v1
+
+  control_constant_l50:
+    <<: *fractional
+    label: "Constant (1/2 L)"
+    length_fraction: 0.5
+
+  control_constant_l75:
+    <<: *fractional
+    label: "Constant (3/4 L)"
+    length_fraction: 0.75
+
+  control_random_l1:
+    <<: *fixed
+    label: "Random (1 token)"
+    mode: random
+    randomization_scope: record_id
+
+  control_random_l25: &random_fractional
+    <<: *fractional
+    label: "Random (1/4 L)"
+    mode: random
+    randomization_scope: record_id
+
+  control_random_l50:
+    <<: *random_fractional
+    label: "Random (1/2 L)"
+    length_fraction: 0.5
+
+  control_random_l75:
+    <<: *random_fractional
+    label: "Random (3/4 L)"
+    length_fraction: 0.75
+
+  control_merged_esm2_l25: &merged
+    method: antigen_merged
+    class: control
+    label: "Token-merged ESM2 (1/4 L)"
+    width: 1280
+    shape_mode: match_source
+    source_embedder: esm2
+    source_model_name: esm2_t33_650M_UR50D
+    source_dir: "artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2"
+    merging: cosine_bipartite_weighted_v1
+    length_fraction: 0.25
+    conditioning_scope: correct_antigen_token_merged_v1
+
+  control_merged_esm2_l50:
+    <<: *merged
+    label: "Token-merged ESM2 (1/2 L)"
+    length_fraction: 0.5
+
+  control_merged_esm2_l75:
+    <<: *merged
+    label: "Token-merged ESM2 (3/4 L)"
+    length_fraction: 0.75
+
+active_embedders:
+  - control_constant_l1
+  - control_constant_l25
+  - control_constant_l50
+  - control_constant_l75
+  - control_constant
+  - control_random_l1
+  - control_random_l25
+  - control_random_l50
+  - control_random_l75
+  - control_random
+  - control_pooled_esm2
+  - control_merged_esm2_l25
+  - control_merged_esm2_l50
+  - control_merged_esm2_l75
+
+analysis:
+  antigen_length_ablation:
+    embedders:
+      - control_constant_l1
+      - control_constant_l25
+      - control_constant_l50
+      - control_constant_l75
+      - control_constant
+      - control_random_l1
+      - control_random_l25
+      - control_random_l50
+      - control_random_l75
+      - control_random
+      - control_pooled_esm2
+      - control_merged_esm2_l25
+      - control_merged_esm2_l50
+      - control_merged_esm2_l75
+      - esm2
+    reference_eval_json: "artifacts/runs/esm2__c49369e9/eval.json"

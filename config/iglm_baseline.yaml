@@ -1,0 +1,15 @@
+# Load after antigen_controls.yaml and antigen_length_ablation.yaml.
+# Train the published full IgLM architecture from scratch on the same cohort.
+execution:
+  min_gpu_memory_gb: 10
+
+iglm_baseline:
+  initialization: random_from_scratch
+  objective: full_chain_autoregressive_v1
+  # A constant start token, not a claim about each record's organism. The
+  # processed MANGO cohort does not supply antibody species as conditioning.
+  species_token: "[HUMAN]"
+
+analysis:
+  antigen_length_ablation:
+    iglm_baseline: true

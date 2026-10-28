@@ -1,0 +1,34 @@
+# Separate experiment: never reuses trained SAbDab2 models or old figure paths.
+experiment_root: artifacts/experiments/abrank_cath_transfer_v1
+cohort_dir: artifacts/experiments/abrank_cath_transfer_v1/cohort
+original_sabdab_records: artifacts/data/sabdab2_v0.1.0/processed/records.csv
+original_esm2_dir: artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2
+esm2_size: t33_650M
+model:
+  architecture: antigen_chain_gpt2_v3
+  target_chains: [heavy, light]
+  epochs: 10
+  lr: 1.0e-4
+  patience: 2
+  grad_accum: 1
+  loss_plot_interval: 250
+  seed: 0
+  shuffle_train: true
+controls:
+  - esm2
+  - control_constant
+  - control_random
+  - control_constant_l1
+  - control_random_l1
+  - control_pooled_esm2
+  - control_shuffled
+  - control_cross_attention_esm2
+labels:
+  esm2: ESM2 prefix
+  control_constant: Constant (full L)
+  control_random: Random (full L)
+  control_constant_l1: Constant (1 token)
+  control_random_l1: Random (1 token)
+  control_pooled_esm2: Mean-pooled ESM2
+  control_shuffled: Shuffled ESM2
+  control_cross_attention_esm2: Cross-attention ESM2

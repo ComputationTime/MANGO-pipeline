@@ -1,0 +1,1 @@
+{"epoch": 0, "iteration": 3, "train_loss": 3.2018396059672036, "val_loss": 2.9661760330200195, "train_order_seed": 0, "train_shuffled": true, "embedder": "biopython", "run_id": "biopython__6d6d3061", "improved": true}

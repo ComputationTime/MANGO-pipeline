@@ -8,11 +8,12 @@ context for coding agents working on a single NVIDIA GPU cloud instance.
 Get the supported workflow running end to end on a very small SAbDab2 subset,
 then run the full configured study. The model task is always:
 
-> Given the antigen and light chain, generate the heavy chain.
+> Given the antigen and a requested chain type, generate that antibody chain.
 
-The heavy chain must never enter the conditioning input. Training, evaluation,
-held-out reconstruction, and generation all use the same antigen + masked-heavy
-AbLang2 light-chain context contract.
+No antibody sequence or antibody-derived embedding may enter the conditioning
+input. Training, evaluation, held-out reconstruction, and generation all use the
+same antigen-only biological input plus a learned heavy/light output selector.
+Heavy-chain generation remains the default for the downstream design analyses.
 
 Start from the repository root with:
 

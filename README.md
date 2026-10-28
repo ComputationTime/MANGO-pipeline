@@ -3,12 +3,12 @@
 MANGO is a Snakemake workflow for training an antigen-conditioned antibody
 language model. Its single task is:
 
-> Given an antigen and a light chain, generate the heavy chain.
+> Given an antigen and a requested chain type, generate that antibody chain.
 
-The heavy chain is never part of the conditioning input. The antibody context
-embedding is produced by AbLang2 from `*|L`, where the heavy-chain slot is
-masked. Training, evaluation, held-out reconstruction, and de novo generation
-all use that same input contract.
+No antibody sequence or antibody-derived embedding is supplied as conditioning.
+Training, evaluation, held-out reconstruction, and de novo generation all use
+the same antigen-only biological input plus a learned heavy/light output
+selector. Heavy-chain generation remains the downstream-analysis default.
 
 The Snakemake workflow is the canonical interface. The older
 `mango/MANGORunner.py` API is legacy code and is not the supported execution
@@ -29,16 +29,14 @@ fetch → standardize → process → embed → train → evaluate
 
 - `process` creates a validation set by holding out complete
   `ab_ag_cluster` groups. Row-wise random validation is deliberately rejected.
-- `embed` builds the selected antigen embeddings and masked-heavy/light-chain
-  AbLang2 context embeddings. AbLang2 weights are downloaded once to
-  `artifacts/weights/ABLANG-ablang2-paired`, never by individual embed jobs.
-- `train` optimizes only heavy-chain tokens.
-- `evaluate` reports heavy-chain NLL and perplexity on train, validation, and
-  test splits.
-- `predict` generates one heavy-chain reconstruction for every configured
-  held-out record.
-- `generate` produces the configured number of de novo heavy chains for a
-  bounded set of held-out records.
+- `embed` builds only the selected antigen representations. AbLang2 remains an
+  independent generated-sequence scorer, not a MANGO input embedder.
+- `train` treats each configured heavy or light target as a separate example.
+- `evaluate` reports token-weighted NLL and perplexity overall and by chain type.
+- `predict` reconstructs the chain selected by `generation.chain` for every
+  configured held-out record.
+- `generate` produces the configured number of de novo selected chains for a
+  bounded set of held-out records; downstream design analysis requires heavy.
 - `analysis` is explicit and produces handbook Figures 1 through 5. Figure 2
   runs Boltz-2 and Chai-1 on a bounded, cluster-diverse generated subset. TAP
   remains deferred.
@@ -135,7 +133,7 @@ study embeddings before launching the full filtered SAbDab2 study:
 The launcher creates its own pinned Snakemake driver, checks CUDA with a real
 matrix multiplication, creates isolated CUDA environments, downloads and
 verifies all active embedder weights, downloads/reuses SAbDab2, embeds, trains one model per representation,
-evaluates, reconstructs held-out heavy chains, generates the configured design
+evaluates, reconstructs the configured held-out chain, generates the design
 cohort, and writes Figures 1, 3, 4, and 5. GPU jobs request a single shared
 `gpu=1` resource, so the representations run sequentially. In GPU mode each
 embedder is one restartable batch and loads its pretrained model once rather
@@ -187,8 +185,10 @@ five diffusion samples per design, run:
   --configfile config/gpu.yaml config/structure.yaml structure_confidence
 ```
 
-This folds the configured deterministic design subset as heavy + cognate light +
-antigen complexes, writes normalized confidence tables, and renders Figure 2.
+This folds the configured deterministic heavy-design subset with the recorded
+reference light chain and antigen, writes normalized confidence tables, and
+renders Figure 2. The reference partner is used only by this downstream quality-
+control analysis; it is never a MANGO conditioning input.
 AF3 is deferred to cluster-side execution and later ingestion through the same
 table contract. Boltz and Chai use single-sequence mode unless
 `structure_prediction.use_msa_server` is explicitly enabled.
@@ -273,7 +273,10 @@ The main settings are in `config/config.yaml`. In particular:
 - `processing.val.cluster_column` identifies the leakage boundary;
   `processing.val.fraction` is the fraction of training clusters held out.
 - `model.*` controls training and early stopping.
+- `model.target_chains` controls which chain targets are learned; neither target
+  sequence is used as conditioning.
 - `model.predict_splits` controls held-out reconstruction.
+- `generation.chain` selects heavy or light output; heavy is the analysis default.
 - `generation.target_selection` chooses one representative from every held-out
   test cluster by default; `generation.max_targets` optionally caps that broad
   cohort and `generation.n_per_target` bounds sampling per target.
@@ -320,3 +323,95 @@ independently rather than as a joint multichain complex.
 
 The implemented Boltz/Chai contract and intended AF3 ingestion are documented in
 `docs/structure_prediction_plan.md`.
+
+## Antigen-only model contract
+
+The default architecture is `antigen_chain_gpt2_v3`. Its prefix contains the
+projected antigen representation, one learned heavy/light output selector, and
+the beginning-of-sequence token. A causal GPT-2 decoder then emits the requested
+chain. Only target residues and EOS receive loss; no antibody sequence,
+antibody embedding or species label is accepted as conditioning.
+
+The `antigen-controls` mode also trains `control_cross_attention_esm2`, using
+architecture `antigen_chain_cross_attention_gpt2_v1`. It reuses the same ESM2
+antigen tensors as separate cross-attention memory at every decoder layer and
+keeps only the H/L selector and BOS in the prefix. It has extra attention
+parameters and a distinct checkpoint identity. See
+[the comparison controls](docs/comparison_controls.md) for the exact comparison.
+
+Use `./run_gpu.sh antigen-length-ablation` to sweep constant, random and
+token-merged ESM2 inputs over 1 token, ¼L, ½L, ¾L and L per record.
+All use width 1280; fractional lengths
+are rounded up with a one-token minimum. ESM2 merges similar frozen antigen
+tokens with mass-weighted averages; its endpoints reuse mean-pooled ESM2 and
+the original full-length ESM2 evaluation. It writes separate train/test NLL
+panels to `artifacts/analysis/figures/fig9_antigen_context_length_ablation.png`,
+with exact values and actual context-length statistics in the matching
+`fig9_antigen_context_length_ablation_data.csv`. See
+[the cloud setup guide](docs/cloud_gpu_setup.md) for the run and resume details.
+
+Use `./run_gpu.sh iglm-baseline` to train the full IgLM architecture from random
+initialization on the same SAbDab2 cohort and add a horizontal reference to
+Figure 9. It uses the same optimizer, seed, target sequences, training order and
+validation stopping rule as MANGO. IgLM receives native H/L tokens and a fixed
+species start token, with residues plus EOS scored by the common token mean.
+The baseline has no antigen context and therefore one reference value per split.
+The full `antigen-length-ablation` mode also includes this baseline.
+
+For the separately audited AbRank experiment, use `./run_gpu.sh abrank-transfer`
+after preparing the CATH-protected cohorts. This trains eight controls on
+AbRank, then fine-tunes matching checkpoints on SAbDab2. New plots and results
+stay under `artifacts/experiments/abrank_cath_transfer_v1/`. See
+[the cohort, contamination audit, and transfer protocol](docs/abrank_transfer.md).
+
+The current pretraining test uses **ASD 2.0**: run `./run_gpu.sh asd-transfer`.
+It includes all BUZZ affinity bins with positive binding evidence, protects the
+same SAbDab2 validation/test cohorts, and writes separate results under
+`artifacts/experiments/asd_cath_transfer_v1/`. See [the ASD transfer protocol](docs/asd_transfer.md).
+
+Use `./run_gpu.sh asd-loss-comparison` for the eight ESM2 models comparing
+standard/focal loss, normal/cross-attention MANGO, and SAbDab2-only/ASD-pretrained
+training. All are evaluated with ordinary NLL on the same native cohort.
+See [the loss comparison protocol](docs/asd_loss_comparison.md).
+
+For rapid iteration, use `./run_gpu.sh asd-prototype`: a HER2-free ASD subset
+with 2,000 training records and one epoch per stage for all eight final ESM2
+models. See [the prototype protocol](docs/asd_prototype.md).
+
+After the prototype finishes, `./run_gpu.sh asd-prototype-iglm` adds two matched
+IgLM controls: SAbDab2-only and HER2-free ASD → SAbDab2. Both start from random
+weights and use CE with one epoch per stage. It reuses the completed MANGO
+evaluations and writes `plots/sabdab2_loss_comparison_with_iglm.png` / `.csv`
+in the prototype results directory.
+
+Use `./run_gpu.sh antigen-diagnostics` to probe antigen dependence, region NLL
+and cluster uncertainty in the prototype. `./run_gpu.sh antigen-diagnostic-training`
+runs small controlled follow-ups for target positions, pooling and IgLM warm
+starts. See [the diagnostic protocol](docs/antigen_diagnostics.md).
+
+Use `./run_gpu.sh asd-scaling` for the ASD-only 2,000/4,000-record comparison of
+IgLM and paired/shuffled ESM2 cross-attention, with fixed held-out targets and
+two-epoch optimization controls. See [the scaling protocol](docs/asd_scaling.md).
+Use `./run_gpu.sh asd-scaling-8k` to append three 8,000-record runs and compare
+them with those frozen baselines. The antigen cap is relaxed for 8k; two antigens
+supply 33% of its records. Held-out targets and the entire 4k training prefix
+remain fixed.
+Use `./run_gpu.sh asd-scaling-16k` to extend the comparison to 16,000 records
+and train regular MANGO with an antigen prefix at 2k/4k/8k/16k. The figure shows
+overall and CDR3 NLL. The dominant antigen requires a partially shuffled 16k
+control; the retained correct-antigen fraction is recorded and shown on the plot.
+Use `./run_gpu.sh asd-scaling-fixed-positions` to add the improved MANGO prefix
+variant with antigen-independent antibody positions at all four training sizes.
+
+Changing from an older conditioning contract requires fresh training. The
+architecture participates in run identity, and checkpoint loading rejects older
+models. For standalone inference, `generate_designs.py` requires a compatible
+checkpoint, one antigen embedding, and a chain choice:
+
+```bash
+python workflow/scripts/generate_designs.py \
+  --ckpt artifacts/runs/NEW_RUN/checkpoints/best.pt \
+  --antigen-emb artifacts/path/to/antigen.pt \
+  --chain heavy --out artifacts/heavy_designs.csv \
+  --gen-cfg '{"n_per_target": 10, "batch_size": 1, "max_new_tokens": 180}'
+```

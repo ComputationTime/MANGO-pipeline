@@ -18,7 +18,7 @@ def _rolling_mean(values, window):
     return means
 
 
-def write_training_plot(history, output, run_id):
+def write_training_plot(history, output, run_id, ylabel="NLL loss"):
     """Atomically refresh an iteration-axis training/validation loss plot."""
     train = [point for point in history if point["phase"] == "train"]
     train_epoch = [point for point in history if point["phase"] == "train_epoch"]
@@ -57,7 +57,7 @@ def write_training_plot(history, output, run_id):
     ax.set(
         title=f"Training curve: {run_id}",
         xlabel="Training iteration",
-        ylabel="NLL loss",
+        ylabel=ylabel,
     )
     ax.grid(alpha=0.25)
     ax.legend()

@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,structure_path,interface,scorefxn,dG_separated,dSASA_int,dG_dSASA_x100,delta_unsat_hbonds,hbonds_int,nres_int,status
+proteinmpnn,proteinmpnn__bfcd4184,pdb_00009d3j_E_F,1,VWEPIQEATQEFVGIGQQQEWDQFAGISPG,chai,0,artifacts/analysis/proteinmpnn__bfcd4184/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,AB_C,ref2015,290.90733390120533,2287.9837340483946,12.714571767801395,13.0,2.0,92.0,ok

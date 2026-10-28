@@ -1,0 +1,16 @@
+# Extend the frozen 2k/4k ASD-only experiment without retraining its baselines.
+experiment_root: artifacts/experiments/asd_scaling_8k_v1
+prototype_config: config/asd_prototype.yaml
+prototype_root: artifacts/experiments/asd_her2_free_prototype_v1
+iglm_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+reference_config: config/asd_scaling.yaml
+report_script: workflow/scripts/report_asd_scaling_8k.py
+sizes: [8000]
+max_antigen_tokens: 768
+max_records_per_antigen: 1500
+seed: 0
+bootstrap_repeats: 2000
+runs:
+  n8000_iglm: {size: 8000, family: iglm, epochs: 1}
+  n8000_cross: {size: 8000, family: cross_attention, epochs: 1}
+  n8000_shuffled: {size: 8000, family: cross_attention, epochs: 1, shuffled: true}

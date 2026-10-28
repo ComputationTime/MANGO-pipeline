@@ -1,0 +1,1 @@
+{"epoch": 0, "iteration": 6, "train_loss": 3.0423994555597003, "val_loss": 2.9091422433977003, "train_order_seed": 0, "train_shuffled": true, "embedder": "proteinmpnn", "run_id": "proteinmpnn__bfcd4184", "improved": true}

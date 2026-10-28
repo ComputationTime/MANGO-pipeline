@@ -1,10 +1,7 @@
 """PyRosetta per-residue energy (PRE) antigen embedding, H=1.
 
-Ports mango.utils.Ag_structure_embeddings.Ag_embeddings.PyRosetta_PRE: scores
-the pose with the full-atom score function and keeps the per-residue total
-energy for the antigen chains only. PRE is a scalar per residue, so the antigen
-"vocabulary" here is R^1 -- the cross-attention projects it up to d_model like
-any other representation.
+Scores an antigen-only pose: all non-antigen residues are removed before
+energy calculation, preventing antibody-target interactions from leaking.
 
 Output shape: [L, 1] over backbone-resolved antigen residues.
 
@@ -56,6 +53,19 @@ def load_runtime(score_function: str):
     return pyrosetta, metric
 
 
+def isolate_antigen(pose, chains):
+    """Remove every non-antigen residue before scoring; retain antigen coordinates."""
+    if not chains:
+        raise ValueError("No antigen chains requested")
+    keep = set(chains)
+    info = pose.pdb_info()
+    remove = [i for i in range(1, pose.total_residue() + 1)
+              if info.chain(i) not in keep]
+    for i in reversed(remove):
+        pose.delete_residue_slow(i)
+    return pose
+
+
 def pyrosetta_pre(
     records_csv: str,
     record_id: str,
@@ -94,6 +104,8 @@ def pyrosetta_pre(
             f"PyRosetta renamed the author chain ids while reading the mmCIF."
         )
 
+    pose = isolate_antigen(pose, chains)
+    info = pose.pdb_info()
     pre = {int(i): float(v) for i, v in metric.calculate(pose).items()}
     by_chain = {
         chain: [pre[i] for i in range(1, pose.total_residue() + 1)
@@ -122,12 +134,13 @@ def pyrosetta_pre(
         mat,
         meta=ec.build_meta(
             embedder=tag,
-            model_name=f"pyrosetta_{score_function}",
+            model_name=f"pyrosetta_{score_function}_antigen_only_v1",
             matrix=mat,
             chains=chains,
             chain_separator_token=add_chain_breaks,
             id=record_id,
             seq_source="structure",
+            conditioning_scope="antigen_only",
             normalize=normalize,
             raw_mean=raw_mean,
             raw_std=raw_std,

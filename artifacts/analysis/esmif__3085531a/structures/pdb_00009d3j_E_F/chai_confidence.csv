@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+esmif,esmif__3085531a,pdb_00009d3j_E_F,1,VEEPIQESTQEFVGIGQQQEWDQFAGISPS,chai,0,0.276809424161911,0.6619258522987366,0.18053029477596283,0.794625461101532,11.611797332763672,False,artifacts/analysis/esmif__3085531a/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,ok

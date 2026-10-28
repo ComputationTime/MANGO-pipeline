@@ -1,0 +1,6 @@
+iteration,epoch,phase,loss,record_id
+1,0,train,3.4380218982696533,pdb_00002x7l_A_B
+2,0,train,3.1502559185028076,pdb_00004lmq_E_I
+3,0,train,3.0754435062408447,pdb_00006ywc_A_B
+3,0,train_epoch,3.221240441004435,
+3,0,validation,2.9519691467285156,

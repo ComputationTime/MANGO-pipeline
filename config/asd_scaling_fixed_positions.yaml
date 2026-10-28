@@ -1,0 +1,18 @@
+# Add the previously improved fixed-position prefix to every frozen ASD size.
+experiment_root: artifacts/experiments/asd_scaling_fixed_positions_v1
+prototype_config: config/asd_prototype.yaml
+prototype_root: artifacts/experiments/asd_her2_free_prototype_v1
+iglm_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+reference_config: config/asd_scaling_16k.yaml
+report_script: workflow/scripts/report_asd_scaling_8k.py
+sizes: [2000, 4000, 8000, 16000]
+max_antigen_tokens: 768
+max_records_per_antigen: 10000
+allow_partial_training_shuffle: true
+seed: 0
+bootstrap_repeats: 2000
+runs:
+  n2000_fixed: {size: 2000, family: mango_fixed, epochs: 1}
+  n4000_fixed: {size: 4000, family: mango_fixed, epochs: 1}
+  n8000_fixed: {size: 8000, family: mango_fixed, epochs: 1}
+  n16000_fixed: {size: 16000, family: mango_fixed, epochs: 1}

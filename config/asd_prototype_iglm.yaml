@@ -1,0 +1,10 @@
+# Add two IgLM baselines to the completed eight-model rapid prototype.
+# Cohort, seed, optimizer settings and one-epoch budget are inherited from its
+# immutable experiment manifest, rather than from the older IgLM experiment.
+experiment_root: artifacts/experiments/asd_her2_free_prototype_iglm_v1
+mango_root: artifacts/experiments/asd_her2_free_prototype_v1
+cohort_dir: artifacts/experiments/asd_her2_free_prototype_v1/cohort
+iglm_baseline:
+  initialization: random_from_scratch
+  objective: full_chain_autoregressive_v1
+  species_token: "[HUMAN]"

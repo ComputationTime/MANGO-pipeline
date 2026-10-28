@@ -1,21 +1,7 @@
-"""Aim 2: de novo heavy-chain designs against one held-out structure.
+"""Generate requested antibody chains from antigen embeddings and chain type.
 
-Generates `n_per_target` heavy chains conditioned on that structure's antigen
-embedding and its light-chain context embedding -- the same pair the model was
-trained on, so sampling matches the trained conditional. Only heavy chains are
-ever produced: that is the task.
-
-The structure comes from whichever dataset split `generation.source` names. It
-is the test split by default, so designs are made against held-out complexes
-from the dataset itself. External therapeutic panels are deliberately deferred
-from the active workflow.
-
-Output is one row per design, tagged with the embedder that produced it, so
-downstream screening can compare representations directly.
-
-Duplicates are kept, not deduplicated: the fraction of repeats is itself a
-signal about how sharply a representation constrains generation, and silently
-collapsing them would bias every downstream distribution.
+No antibody sequence or embedding is required. Records are optional metadata
+for the study workflow. Every design explicitly records its chain type.
 """
 
 import csv
@@ -32,7 +18,7 @@ import device_common as dc
 
 COLUMNS = [
     "embedder", "run_id", "target_id", "split", "design_index",
-    "sequence", "length", "status",
+    "chain_type", "sequence", "length", "status",
 ]
 
 # Progress cadence: generation is the slowest step, so say something regularly.
@@ -41,13 +27,7 @@ _REPORT_EVERY = 500
 
 def _load_model(ckpt_path, device):
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    model = mc.MangoModel(
-        d_ag=int(ckpt["d_ag"]),
-        n_heads=int(ckpt["n_heads"]),
-        n_layers=int(ckpt["n_layers"]),
-    )
-    model.cross_attn.load_state_dict(ckpt["cross_attn"])
-    model.lm.load_state_dict(ckpt["lm"])
+    model = mc.MangoModel.from_checkpoint(ckpt)
     return model.to(device).eval()
 
 
@@ -64,28 +44,27 @@ def _target_row(records_csv, target_id):
 
 
 def generate(ckpt_path, model_config_path, records_csv, antigen_emb_path,
-             antibody_emb_path, target_id, split, tag, gen_cfg, seed, out_csv):
+             target_id, split, tag, gen_cfg, seed, out_csv):
     device = dc.get_device(f"generation {tag}")
     torch.manual_seed(int(seed))
 
     model = _load_model(ckpt_path, device)
-    with open(model_config_path) as fh:
-        run_id = json.load(fh).get("run_id", "")
-
-    row = _target_row(records_csv, target_id)
+    run_id = ""
+    if model_config_path:
+        with open(model_config_path) as fh:
+            run_id = json.load(fh).get("run_id", "")
+    if records_csv:
+        _target_row(records_csv, target_id)  # Metadata identity check only.
+    chain = model.normalize_chain(gen_cfg.get("chain", "heavy"))
+    if chain not in model.target_chains:
+        raise ValueError(f"Checkpoint was not trained for {chain} chains")
     h_ag = mc.load_embedding(antigen_emb_path).to(device)
-    x_ctx = mc.load_embedding(antibody_emb_path).to(device)
 
     n = int(gen_cfg["n_per_target"])
-    # The 480-wide decoder fits a batch of 128 comfortably on the required
+    # The compact decoder fits a batch of 128 comfortably on the required
     # 48 GB-class study GPU while avoiding thousands of one-sample launches.
     batch_size = max(1, int(gen_cfg.get("batch_size", 128)))
-    print(
-        f"[{tag}] {target_id} ({split}): generating {n} heavy chains against "
-        f"antigen chains {row['antigen_chains']} + light chain "
-        f"({len(row['resolved_L_seq'])} aa) on {device}",
-        flush=True,
-    )
+    print(f"[{tag}] {target_id}: generating {n} {chain} chains from antigen only on {device}", flush=True)
 
     Path(out_csv).parent.mkdir(parents=True, exist_ok=True)
     n_ok = 0
@@ -96,9 +75,8 @@ def generate(ckpt_path, model_config_path, records_csv, antigen_emb_path,
         for batch_start in range(0, n, batch_size):
             current_batch = min(batch_size, n - batch_start)
             try:
-                sampled = model.generate_heavy_batch(
-                    x_ctx,
-                    h_ag,
+                sampled = model.generate_chain_batch(
+                    h_ag, chain,
                     batch_size=current_batch,
                     max_new_tokens=int(gen_cfg["max_new_tokens"]),
                     do_sample=bool(gen_cfg.get("do_sample", True)),
@@ -114,6 +92,7 @@ def generate(ckpt_path, model_config_path, records_csv, antigen_emb_path,
                     "run_id": run_id,
                     "target_id": target_id,
                     "split": split,
+                    "chain_type": chain,
                     "design_index": batch_start + offset,
                 }
                 if isinstance(result, Exception):
@@ -122,7 +101,7 @@ def generate(ckpt_path, model_config_path, records_csv, antigen_emb_path,
                         status=f"error: {type(result).__name__}: {result}",
                     )
                 else:
-                    seq = model.decode_heavy(result)
+                    seq = model.decode_chain(result)
                     base.update(sequence=seq, length=len(seq), status="ok")
                     n_ok += 1
                 writer.writerow(base)
@@ -144,7 +123,6 @@ def main():
             model_config_path=smk.input.model_config,
             records_csv=smk.input.records,
             antigen_emb_path=smk.params.antigen_emb,
-            antibody_emb_path=smk.params.antibody_emb,
             target_id=smk.wildcards.instance,
             split=smk.params.split,
             tag=smk.params.tag,
@@ -158,24 +136,25 @@ def main():
 
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--ckpt", required=True)
-    p.add_argument("--model-config", required=True)
-    p.add_argument("--records", required=True)
+    p.add_argument("--model-config")
+    p.add_argument("--records")
     p.add_argument("--antigen-emb", required=True)
-    p.add_argument("--antibody-emb", required=True)
-    p.add_argument("--target-id", required=True)
+    p.add_argument("--target-id", default="antigen")
     p.add_argument("--split", default="test")
-    p.add_argument("--tag", required=True)
+    p.add_argument("--tag", default="manual")
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=13)
     p.add_argument("--gen-cfg", default="{}")
+    p.add_argument("--chain", choices=["heavy", "light", "H", "L"], default="heavy")
     a = p.parse_args()
     gen = {
         "n_per_target": 100, "max_new_tokens": 130,
         "do_sample": True, "top_p": 1.0, "temperature": 1.0,
     }
     gen.update(json.loads(a.gen_cfg))
+    gen["chain"] = a.chain
     generate(
-        a.ckpt, a.model_config, a.records, a.antigen_emb, a.antibody_emb,
+        a.ckpt, a.model_config, a.records, a.antigen_emb,
         a.target_id, a.split, a.tag, gen, a.seed, a.out,
     )
 

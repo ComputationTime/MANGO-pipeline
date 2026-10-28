@@ -1,39 +1,8 @@
-"""Shared model code for the MANGO train/predict rules.
+"""Antigen + requested chain type -> antibody chain, using a causal GPT-2 head.
 
-THE TASK
---------
-Given the ANTIGEN and the LIGHT chain, predict the HEAVY chain. That single
-sentence fixes the whole input/output contract, and every path through this
-module -- training, evaluation, reconstruction, de novo generation -- honours
-it identically. The heavy chain is never part of the conditioning signal, so
-there is nothing to leak.
-
-Sequence layout fed to GPT2 (positions left to right)::
-
-    [ ctx_0 ... ctx_{m-1} ] [ < ] [ h_1 ... h_n ] [ > ]
-     antigen-conditioned    start   heavy chain    end
-     light-chain context           (teacher-forced)
-
-    labels:  -100 x (m+1)          h_1 ... h_n      >
-
-* ``ctx`` is the precomputed antibody CONTEXT embedding -- AbLang2 run on
-  ``'*|L'``, i.e. the light chain with the heavy slot masked -- cross-attended
-  against the antigen embedding. Dim 480 = MANGO's hidden size.
-* The heavy tokens enter through GPT2's own ``wte``, so teacher forcing is
-  exact: the logit at each heavy position sees only earlier heavy positions.
-* Labels are -100 across the whole context block, so loss is computed on the
-  heavy chain and its end token and nothing else. Every reported NLL is
-  therefore a heavy-chain NLL, comparable across antigen representations.
-
-Generation uses the identical prefix (``ctx`` + ``<``) and lets GPT2 continue
-autoregressively, so what is sampled is exactly what was trained.
-
-MANGO's 26-symbol vocabulary equals the AbLang2 token ids, so labels come
-straight from the sequence via ``ablang_vocab`` -- no AbLang2 at model time.
-
-The cross-attention stack (mango.utils.cross_attention.TransformerStack) and the
-vocab/config constants (mango.utils.mango_utils) are imported WITHOUT running
-mango/__init__.py, so this stays free of esm/ablang2/pyrosetta.
+Default prefix: projected antigen, learned H/L selector, BOS. The cross-attention
+control keeps antigen memory separate and prefixes only the selector and BOS.
+Only target residues and EOS receive labels. No antibody enters conditioning.
 """
 
 import importlib
@@ -65,113 +34,209 @@ def import_mango(dotted: str, mango_dir=None):
 
 
 class MangoModel(nn.Module):
-    """Cross-attention fusion (light-chain context <- antigen) + GPT2 LM head.
+    """Antigen-only conditioning with an explicit heavy/light selector."""
 
-    Conditioning is antigen + light chain; the output is the heavy chain.
-    """
+    ARCHITECTURE = "antigen_chain_gpt2_v3"
+    FIXED_POSITION_ARCHITECTURE = "antigen_chain_fixed_position_gpt2_v1"
+    CROSS_ATTENTION_ARCHITECTURE = "antigen_chain_cross_attention_gpt2_v1"
+    TASK = "antigen+chain_type->chain"
+    CHAIN_IDS = {"heavy": 0, "light": 1}
 
-    def __init__(self, d_ag: int, n_heads: int, n_layers: int, mango_dir=None):
+    @staticmethod
+    def normalize_chain(chain):
+        aliases = {"h": "heavy", "heavy": "heavy", "l": "light", "light": "light"}
+        try:
+            return aliases[str(chain).lower()]
+        except KeyError:
+            raise ValueError(f"Unknown chain {chain!r}; choose heavy/H or light/L") from None
+
+    def __init__(self, d_ag: int, mango_dir=None, target_chains=("heavy", "light"),
+                 architecture=ARCHITECTURE):
         super().__init__()
-        xattn = import_mango("mango.utils.cross_attention", mango_dir)
+        if architecture not in {self.ARCHITECTURE, self.FIXED_POSITION_ARCHITECTURE, self.CROSS_ATTENTION_ARCHITECTURE}:
+            raise ValueError(f"Unsupported model architecture: {architecture}")
+        self.architecture = architecture
+        self.uses_cross_attention = architecture == self.CROSS_ATTENTION_ARCHITECTURE
+        self.uses_fixed_positions = architecture == self.FIXED_POSITION_ARCHITECTURE
         mu = import_mango("mango.utils.mango_utils", mango_dir)
         self.vocab = dict(mu.ablang_vocab)
         self.decode = {i: c for c, i in self.vocab.items()}
-        self.configs = mu.MANGO_configs
+        import copy
+        self.configs = copy.deepcopy(mu.MANGO_configs)
+        self.configs.n_embd = 488
         self.bad_word_ids = list(mu.BAD_WORD_IDS)
         self.d_model = self.configs.hidden_size
 
         from transformers import GPT2LMHeadModel
 
-        self.cross_attn = xattn.TransformerStack(
-            d_model=self.d_model, n_heads=n_heads, n_layers=n_layers, d_Ag_rep=d_ag
-        )
-        self.lm = GPT2LMHeadModel(self.configs)
+        decoder_type = GPT2LMHeadModel
+        if self.uses_fixed_positions:
+            from fixed_position_prefix import FixedPositionGPT2LMHeadModel
+            decoder_type = FixedPositionGPT2LMHeadModel
+        self.lm = decoder_type(self.configs)
+        self.chain_embedding = nn.Embedding(2, self.d_model)
+        # Projection width must not alter decoder initialization or dropout RNG.
+        with torch.random.fork_rng(devices=[]):
+            self.antigen_projection = nn.Linear(d_ag, self.d_model)
+        self.target_chains = tuple(self.normalize_chain(c) for c in target_chains)
+        if not self.target_chains or len(set(self.target_chains)) != len(self.target_chains):
+            raise ValueError("target_chains must be nonempty and unique")
         self.d_ag = d_ag
+        if self.uses_cross_attention:
+            # Preserve the baseline decoder, selector, projection and RNG state.
+            # Only the new cross-attention modules receive different weights.
+            self.configs.add_cross_attention = True
+            with torch.random.fork_rng(devices=[]):
+                cross_lm = GPT2LMHeadModel(self.configs)
+                missing, unexpected = cross_lm.load_state_dict(self.lm.state_dict(), strict=False)
+                if unexpected or any(
+                    ".crossattention." not in name and ".ln_cross_attn." not in name
+                    for name in missing
+                ):
+                    raise RuntimeError("Cross-attention decoder differs from the shared baseline")
+            self.lm = cross_lm
+
+    @property
+    def cross_attention_parameters(self):
+        return sum(p.numel() for name, p in self.lm.named_parameters()
+                   if ".crossattention." in name or ".ln_cross_attn." in name)
 
     # --- tokenisation --------------------------------------------------------
-    def heavy_token_ids(self, heavy: str) -> "torch.Tensor":
-        """(1, n+2) decoder tokens for the target heavy chain: '<' + H + '>'.
+    def target_token_ids(self, sequence: str) -> "torch.Tensor":
+        """(1, n+2) decoder tokens for the target chain: BOS + residues + EOS.
 
         One token per residue -- MANGO's vocab is AbLang2's, so unknown symbols
         fall back to 'X' exactly as AbLang2 would tokenise them.
         """
         ids = (
             [self.vocab["<"]]
-            + [self.vocab.get(c, self.vocab["X"]) for c in heavy]
+            + [self.vocab.get(c, self.vocab["X"]) for c in sequence]
             + [self.vocab[">"]]
         )
         return torch.tensor([ids], dtype=torch.long)
 
     @staticmethod
-    def n_target_tokens(heavy_ids: "torch.Tensor") -> int:
-        """How many tokens the loss is actually computed over: len(H) + 1 (EOS)."""
-        return int(heavy_ids.shape[1]) - 1
+    def n_target_tokens(target_ids: "torch.Tensor") -> int:
+        """How many tokens the loss is actually computed over: len(target) + 1 (EOS)."""
+        return int(target_ids.shape[1]) - 1
 
     # --- forward paths -------------------------------------------------------
-    def fuse(self, x_ctx: "torch.Tensor", h_ag: "torch.Tensor") -> "torch.Tensor":
-        """x_ctx:(1,m,480), h_ag:(1,L_ag,d_ag) -> antigen-conditioned (1,m,480)."""
-        return self.cross_attn(x_ctx, h_ag)
+    @classmethod
+    def from_checkpoint(cls, checkpoint):
+        if checkpoint.get("architecture") not in {
+            cls.ARCHITECTURE, cls.FIXED_POSITION_ARCHITECTURE, cls.CROSS_ATTENTION_ARCHITECTURE
+        }:
+            raise ValueError(
+                "Incompatible MANGO checkpoint: antigen + chain conditioning requires "
+                "fresh training; checkpoints from earlier conditioning architectures "
+                "cannot be reused."
+            )
+        model = cls(d_ag=int(checkpoint["d_ag"]), target_chains=checkpoint["target_chains"],
+                    architecture=checkpoint["architecture"])
+        model.chain_embedding.load_state_dict(checkpoint["chain_embedding"])
+        model.antigen_projection.load_state_dict(checkpoint["antigen_projection"])
+        model.lm.load_state_dict(checkpoint["lm"])
+        return model
 
-    def _prefix(self, x_ctx, h_ag):
-        """Antigen-conditioned light-chain context + the start token embedding."""
+    def _check_length(self, length):
+        if length > self.configs.n_positions:
+            raise ValueError(
+                f"Decoder prefix + target sequence requires {length} positions, "
+                f"exceeding GPT-2 capacity {self.configs.n_positions}. "
+                "Reduce decoder prefix or target/generation length."
+            )
+
+    def _prefix(self, h_ag, chain):
+        """Identical training/generation prefix; no antibody sequence argument."""
+        chain = self.normalize_chain(chain)
+        if chain not in self.target_chains:
+            raise ValueError(f"Checkpoint was not trained for {chain} chains")
         device = next(self.parameters()).device
-        ctx = self.fuse(x_ctx, h_ag)  # (1, m, 480)
         start = self.lm.transformer.wte(
             torch.tensor([[self.vocab["<"]]], device=device)
-        )  # (1, 1, 480)
-        return torch.cat([ctx, start], dim=1)  # (1, m+1, 480)
+        )
+        selector = self.chain_embedding(torch.tensor([[self.CHAIN_IDS[chain]]], device=device))
+        pieces = [selector, start]
+        if not self.uses_cross_attention:
+            pieces.insert(0, self.antigen_projection(h_ag))
+        prefix = torch.cat(pieces, dim=1)
+        self._check_length(prefix.shape[1])
+        return prefix
 
-    def loss(self, x_ctx, h_ag, heavy_ids):
-        """Teacher-forced heavy-chain cross-entropy.
+    def _antigen_context(self, h_ag, batch_size=1):
+        if not self.uses_cross_attention:
+            return {}
+        memory = self.antigen_projection(h_ag).expand(int(batch_size), -1, -1).contiguous()
+        return {"encoder_hidden_states": memory}
 
-        Loss covers the heavy residues and the end token only: the context block
-        is labelled -100, so the number here is a heavy-chain NLL regardless of
-        how long the antigen or light chain happen to be.
+    def loss(self, h_ag, chain, target_ids, training_loss=None, return_nll=False):
+        """Teacher-forced target-chain cross-entropy.
+
+        Loss covers the target residues and the end token only: the context block
+        is labelled -100, so the number here is a target-chain NLL regardless of
+        how long the antigen happens to be.
         """
         device = next(self.parameters()).device
-        heavy_ids = heavy_ids.to(device)
-        prefix = self._prefix(x_ctx, h_ag)  # (1, m+1, 480), ends on '<'
-        # heavy_ids[:, 1:] is H + '>' -- '<' is already in the prefix.
-        tail = self.lm.transformer.wte(heavy_ids[:, 1:])  # (1, n+1, 480)
+        target_ids = target_ids.to(device)
+        prefix = self._prefix(h_ag, chain)  # ends on '<'; antigen is optional here
+        # target_ids[:, 1:] is target + EOS -- '<' is already in the prefix.
+        tail = self.lm.transformer.wte(target_ids[:, 1:])  # (1, n+1, d_model)
         inputs = torch.cat([prefix, tail], dim=1)
+        self._check_length(inputs.shape[1])
 
         labels = torch.full(
             (1, inputs.shape[1]), -100, dtype=torch.long, device=device
         )
         # GPT2 shifts internally: the logit at position t is scored against
-        # labels[t+1]. Placing H+'>' immediately after the '<' position makes
-        # '<' predict h_1 and h_n predict '>'.
-        labels[0, prefix.shape[1] :] = heavy_ids[0, 1:]
-        return self.lm(inputs_embeds=inputs, labels=labels).loss
+        # labels[t+1]. Placing target+EOS immediately after the '<' position makes
+        # BOS predict the first residue and the last residue predict EOS.
+        labels[0, prefix.shape[1] :] = target_ids[0, 1:]
+        context = self._antigen_context(h_ag)
+        if self.uses_fixed_positions:
+            from fixed_position_prefix import causal_context
+            context.update(causal_context(h_ag.shape[1], inputs))
+        if training_loss is None:
+            nll = self.lm(inputs_embeds=inputs, labels=labels,
+                          **context).loss
+            return (nll, nll) if return_nll else nll
+        from training_losses import causal_token_losses
+        logits = self.lm(inputs_embeds=inputs, **context).logits
+        objective, nll = causal_token_losses(logits, labels, training_loss)
+        return (objective, nll) if return_nll else objective
 
     @torch.no_grad()
-    def generate_heavy(self, x_ctx, h_ag, max_new_tokens, do_sample, top_p,
+    def generate_chain(self, h_ag, chain, max_new_tokens, do_sample, top_p,
                        temperature):
-        """Sample a heavy chain given the antigen and the light-chain context.
+        """Sample a requested chain given the antigen and the requested chain type.
 
         The prompt is byte-identical to training's prefix, so sampling matches
-        the trained conditional. The true heavy chain is never supplied.
+        the trained conditional. The true requested chain is never supplied.
         """
-        return self.generate_heavy_batch(
-            x_ctx, h_ag, batch_size=1, max_new_tokens=max_new_tokens,
+        return self.generate_chain_batch(
+            h_ag, chain, batch_size=1, max_new_tokens=max_new_tokens,
             do_sample=do_sample, top_p=top_p, temperature=temperature,
         )[0]
 
     @torch.no_grad()
-    def generate_heavy_batch(self, x_ctx, h_ag, batch_size, max_new_tokens,
+    def generate_chain_batch(self, h_ag, chain, batch_size, max_new_tokens,
                              do_sample, top_p, temperature):
-        """Sample several heavy chains from one conditioning pair at once.
+        """Sample several requested chains from one conditioning pair at once.
 
-        All members of a generation batch share the same antigen/light-chain
-        prefix. Expanding that prefix lets Hugging Face perform each decoding
+        All members of a generation batch share the same antigen and chain type.
+        Expanding the prefix and memory lets Hugging Face perform each decoding
         step for the whole batch in one GPU call, which is substantially faster
         than invoking ``generate`` once per design.
         """
         if int(batch_size) < 1:
             raise ValueError("batch_size must be positive")
-        seed = self._prefix(x_ctx, h_ag).expand(
+        seed = self._prefix(h_ag, chain).expand(
             int(batch_size), -1, -1
         ).contiguous()
+        self._check_length(seed.shape[1] + int(max_new_tokens))
+        context = self._antigen_context(h_ag, batch_size)
+        if self.uses_fixed_positions:
+            context.update(antigen_prefix_length=h_ag.shape[1],
+                           attention_mask=torch.ones(seed.shape[:2], dtype=torch.long, device=seed.device))
         out = self.lm.generate(
             inputs_embeds=seed,
             max_new_tokens=max_new_tokens,
@@ -180,12 +245,13 @@ class MangoModel(nn.Module):
             temperature=temperature,
             eos_token_id=self.vocab[">"],
             pad_token_id=self.vocab["-"],
-            bad_words_ids=self.bad_word_ids,  # blocks specials incl. '|' -> heavy only
+            bad_words_ids=self.bad_word_ids,  # blocks specials incl. '|' -> residues only
+            **context,
         )
         return [row.tolist() for row in out]
 
-    def decode_heavy(self, ids) -> str:
-        """Ids -> heavy AA string, stopping at end/sep, dropping special tokens."""
+    def decode_chain(self, ids) -> str:
+        """Ids -> chain AA string, stopping at end/sep, dropping special tokens."""
         specials = {"<", "-", ">", "*", "X", "|"}
         chars = []
         for i in ids:
@@ -200,5 +266,40 @@ class MangoModel(nn.Module):
 # --- embedding loading -------------------------------------------------------
 def load_embedding(path: str) -> "torch.Tensor":
     """Load a saved embedding as (1, L, H)."""
+    from embedding_store import load_stored_embedding
+    if not Path(path).is_file():
+        return load_stored_embedding(path)
     payload = torch.load(path, map_location="cpu", weights_only=False)
+    if str(payload.get("model_name", "")).startswith("pyrosetta_") and payload.get("conditioning_scope") != "antigen_only":
+        raise ValueError(f"Unsafe legacy PRE cache; recompute antigen-only embedding: {path}")
     return payload["embedding"].unsqueeze(0)
+
+
+def comparison_cohort(records_csv):
+    """Validate target/split contracts and fingerprint the ordered comparison data."""
+    import csv
+    import hashlib
+    import json
+    with open(records_csv) as fh:
+        rows = list(csv.DictReader(fh))
+    seen = set()
+    clusters = {}
+    for row in rows:
+        if row.get("target_contract") != "imgt_variable_vh_vl_v1":
+            raise ValueError("Re-standardize records: variable VH/VL target contract required")
+        if row["id"] in seen:
+            raise ValueError(f"Duplicate record: {row['id']}")
+        seen.add(row["id"])
+        cluster = row.get("ab_ag_cluster")
+        if not cluster:
+            raise ValueError("Comparison requires ab_ag_cluster for every record")
+        if clusters.setdefault(cluster, row["split"]) != row["split"]:
+            raise ValueError(f"Cluster crosses splits: {cluster}")
+    fields = ("id", "split", "ab_ag_cluster", "resolved_H_seq", "resolved_L_seq", "resolved_ag_seq", "antigen_chains", "target_contract")
+    if rows and 'example_target_chains' in rows[0]:
+        from chain_examples import example_chains
+        for row in rows:
+            example_chains(row)
+        fields += ('example_target_chains',)
+    canonical = [[row.get(k, "") for k in fields] for row in rows]
+    return hashlib.sha256(json.dumps(canonical, separators=(",", ":")).encode()).hexdigest()

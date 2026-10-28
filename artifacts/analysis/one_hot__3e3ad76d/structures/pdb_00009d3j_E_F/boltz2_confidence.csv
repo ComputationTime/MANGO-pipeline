@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+one_hot,one_hot__3e3ad76d,pdb_00009d3j_E_F,1,VWEPILEATQEFVGIGQQQEWIQFAGISPS,boltz2,0,0.7979907393455505,0.8391968011856079,0.6877650022506714,0.8255470991134644,6.144900798797607,,artifacts/analysis/one_hot__3e3ad76d/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,ok

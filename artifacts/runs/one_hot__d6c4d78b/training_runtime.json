@@ -1,0 +1,13 @@
+{
+  "status": "complete",
+  "embedder": "one_hot",
+  "wall_seconds": 441.4024015480027,
+  "scope": "Training function: validation, checkpoint and live-curve writes included; embedding, installation and downloads excluded",
+  "peak_torch_allocated_mib": 791.2734375,
+  "peak_torch_reserved_mib": 1646.0,
+  "peak_vram_mib": 1844.0,
+  "vram_samples": 832,
+  "vram_sample_interval_seconds": 0.5,
+  "vram_measurement_error": null,
+  "vram_scope": "Sampled peak sum of NVIDIA compute-process memory for command descendants. Excludes desktop and independent jobs; short peaks can be missed. Not a proven minimum VRAM requirement."
+}

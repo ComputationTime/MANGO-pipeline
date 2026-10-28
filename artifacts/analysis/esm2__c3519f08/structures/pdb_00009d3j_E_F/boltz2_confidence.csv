@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+esm2,esm2__c3519f08,pdb_00009d3j_E_F,1,IEEPIQEATQEFVGIGQQQEWDQFAFISPS,boltz2,0,0.8207692503929138,0.8756260871887207,0.7539772391319275,0.8374671936035156,5.260263919830322,,artifacts/analysis/esm2__c3519f08/structures/pdb_00009d3j_E_F/boltz2_raw/outputs/boltz_results_inputs/predictions/design_000001/design_000001_model_0.cif,ok

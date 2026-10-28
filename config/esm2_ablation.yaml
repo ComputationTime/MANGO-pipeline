@@ -1,0 +1,47 @@
+# ESM2-size ablation on the exact dataset, split, decoder, and training setup
+# used by the existing 650M `esm2` run. The 650M tag remains unchanged so its
+# cached checkpoint and eval.json can be reused without retraining.
+execution:
+  # The largest newly embedded checkpoint is only 150M; the completed 650M
+  # point was already validated on the local 11.6 GiB card and is read-only.
+  min_gpu_memory_gb: 10
+
+embedders:
+  esm2_8m:
+    method: esm2
+    class: learned
+    label: "ESM2 8M"
+    size: "t6_8M"
+
+  esm2_35m:
+    method: esm2
+    class: learned
+    label: "ESM2 35M"
+    size: "t12_35M"
+
+  esm2_150m:
+    method: esm2
+    class: learned
+    label: "ESM2 150M"
+    size: "t30_150M"
+
+active_embedders:
+  - esm2_8m
+  - esm2_35m
+  - esm2_150m
+  - esm2
+
+# Build missing ablation checkpoints, but never invalidate the completed 650M
+# checkpoint merely because an upstream artifact has a newer timestamp.
+model:
+  retrain: false
+
+analysis:
+  esm2_ablation:
+    embedders:
+      - esm2_8m
+      - esm2_35m
+      - esm2_150m
+      - esm2
+    reuse_tag: esm2
+    reuse_eval_json: "artifacts/runs/esm2__c49369e9/eval.json"

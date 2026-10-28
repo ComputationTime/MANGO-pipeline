@@ -1,0 +1,17 @@
+{
+  "antibody_embedder": "ablang2_light_only",
+  "architecture": "antigen_prefix_gpt2_v1",
+  "d_ag": 128,
+  "d_model": 480,
+  "decoder_trainable_parameters": 12080640,
+  "embedder": "proteinmpnn",
+  "experiment_hash": "46d400fe",
+  "n_head": 8,
+  "n_layer": 4,
+  "n_positions": 2048,
+  "projection_trainable_parameters": 61920,
+  "run_id": "proteinmpnn__46d400fe",
+  "task": "antigen+light->heavy",
+  "trainable_parameters": 12142560,
+  "vocab_size": 26
+}

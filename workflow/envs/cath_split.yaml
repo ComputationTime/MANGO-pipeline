@@ -1,0 +1,8 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - mmseqs2=18.8cc5c
+  - hmmer=3.4
+  - biopython=1.85

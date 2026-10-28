@@ -1,0 +1,1 @@
+{"epoch": 0, "iteration": 6, "train_loss": 3.0148912826257757, "val_loss": 2.8639578654136493, "train_order_seed": 0, "train_shuffled": true, "embedder": "pyrosetta_pre", "run_id": "pyrosetta_pre__f53020ee", "improved": true}

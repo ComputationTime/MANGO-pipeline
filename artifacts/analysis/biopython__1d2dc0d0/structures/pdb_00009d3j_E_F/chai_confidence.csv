@@ -1,0 +1,2 @@
+embedder,run_id,target_id,design_index,sequence,predictor,sample_index,confidence_score,ptm,iptm,complex_plddt,mean_pae,has_inter_chain_clashes,structure_path,status
+biopython,biopython__1d2dc0d0,pdb_00009d3j_E_F,1,VWEPILESTQEFKGIGQQQEWIQFAGISPS,chai,0,0.3300652801990509,0.678240180015564,0.24302154779434204,0.8135091066360474,10.067449569702148,False,artifacts/analysis/biopython__1d2dc0d0/structures/pdb_00009d3j_E_F/chai_raw/design_000001/prediction/pred.model_idx_0.cif,ok

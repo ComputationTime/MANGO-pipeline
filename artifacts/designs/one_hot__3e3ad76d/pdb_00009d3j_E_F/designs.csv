@@ -1,0 +1,3 @@
+embedder,run_id,target_id,split,design_index,chain_type,sequence,length,status
+one_hot,one_hot__3e3ad76d,pdb_00009d3j_E_F,test,0,heavy,ATGIEAEAKEEISVQKETFPPPSQPSSTKS,30,ok
+one_hot,one_hot__3e3ad76d,pdb_00009d3j_E_F,test,1,heavy,VWEPILEATQEFVGIGQQQEWIQFAGISPS,30,ok
