@@ -135,21 +135,29 @@ def add_legend(fig, embedders, labels, color_map, location="lower center"):
     )
 
 
-def add_axes_legend(ax, embedders, labels, color_map):
-    """Place an embedder legend inside an axes at its upper-right corner."""
+def add_axes_legend(
+    ax, embedders, labels, color_map, loc="upper right", bbox_to_anchor=None,
+    ncol=1,
+):
+    """Place an embedder legend on an axes."""
     handles = [
         matplotlib.patches.Patch(color=color_map[tag], label=labels.get(tag, tag))
         for tag in embedders
     ]
-    ax.legend(
+    kwargs = dict(
         handles=handles,
-        loc="upper right",
+        loc=loc,
         frameon=True,
         facecolor="white",
         edgecolor="none",
         framealpha=0.85,
         fontsize=LEGEND_SIZE,
+        ncol=ncol,
     )
+    if bbox_to_anchor is not None:
+        kwargs["bbox_to_anchor"] = bbox_to_anchor
+        kwargs["borderaxespad"] = 0.2
+    ax.legend(**kwargs)
 
 
 def shared_edges(frame, column, bins=30):
@@ -288,33 +296,55 @@ def _save_subplots(fig, out_figure, dpi):
             temporary_legend = ax.legend(
                 handles,
                 labels,
-                loc="best",
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.34),
+                ncol=min(4, len(handles)),
                 frameon=True,
                 facecolor="white",
                 edgecolor="none",
                 framealpha=0.85,
                 fontsize=LEGEND_SIZE,
             )
-            fig.canvas.draw()
 
-        bbox = ax.get_tightbbox(renderer)
-        if temporary_legend is not None:
-            bbox = Bbox.union([bbox, temporary_legend.get_window_extent(renderer)])
-        bbox_inches = bbox.transformed(fig.dpi_scale_trans.inverted()).expanded(
-            1.04, 1.08
-        )
-        subplot_path = subplot_dir / (
-            f"{output.stem}_subplot_{index:02d}_{_subplot_slug(ax, index)}.png"
-        )
-        fig.savefig(
-            subplot_path,
-            dpi=max(300, int(dpi)),
-            bbox_inches=bbox_inches,
-            facecolor="white",
-        )
-        written.append(subplot_path)
-        if temporary_legend is not None:
-            temporary_legend.remove()
+        # Hide neighboring panels and the shared figure legend while exporting
+        # this panel. Otherwise their artists can leak into the panel's crop.
+        other_axes = [candidate for candidate in visible_axes if candidate is not ax]
+        figure_legend_visibility = [
+            (legend, legend.get_visible()) for legend in fig.legends
+        ]
+        for candidate in other_axes:
+            candidate.set_visible(False)
+        for legend, _visible in figure_legend_visibility:
+            legend.set_visible(False)
+        try:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            bbox = ax.get_tightbbox(renderer)
+            if temporary_legend is not None:
+                bbox = Bbox.union([
+                    bbox,
+                    temporary_legend.get_window_extent(renderer),
+                ])
+            bbox_inches = bbox.transformed(fig.dpi_scale_trans.inverted()).expanded(
+                1.08, 1.15
+            )
+            subplot_path = subplot_dir / (
+                f"{output.stem}_subplot_{index:02d}_{_subplot_slug(ax, index)}.png"
+            )
+            fig.savefig(
+                subplot_path,
+                dpi=max(300, int(dpi)),
+                bbox_inches=bbox_inches,
+                facecolor="white",
+            )
+            written.append(subplot_path)
+        finally:
+            for candidate in other_axes:
+                candidate.set_visible(True)
+            for legend, was_visible in figure_legend_visibility:
+                legend.set_visible(was_visible)
+            if temporary_legend is not None:
+                temporary_legend.remove()
             fig.canvas.draw()
     return written
 
@@ -324,7 +354,10 @@ def save(fig, data, out_figure, out_data, dpi):
     Path(out_data).parent.mkdir(parents=True, exist_ok=True)
     data.to_csv(out_data, index=False)
     Path(out_figure).parent.mkdir(parents=True, exist_ok=True)
-    if getattr(fig, "_mango_legend_location", None) == "upper right":
+    layout_rect = getattr(fig, "_mango_layout_rect", None)
+    if layout_rect is not None:
+        fig.tight_layout(rect=layout_rect)
+    elif getattr(fig, "_mango_legend_location", None) == "upper right":
         fig.tight_layout(rect=(0, 0.02, 0.82, 0.97))
     else:
         fig.tight_layout(rect=(0, 0.07, 1, 0.97))

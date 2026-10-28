@@ -20,6 +20,25 @@ PANELS = [
 CHAIN_TYPES = ("Heavy", "Light")
 
 
+def _perplexity_bar(log_likelihoods):
+    """Median perplexity and the quartile distances used as error bars.
+
+    Bar height is the median of per-sequence perplexities, ``exp(-score)``.
+    The lower and upper errors are the distances from that median to the
+    25th and 75th percentiles.
+    """
+    values = np.exp(
+        -pd.to_numeric(pd.Series(log_likelihoods), errors="coerce").dropna()
+    )
+    if len(values) == 0:
+        missing = np.nan
+        return missing, missing, missing, missing, missing, 0
+    median = float(values.median())
+    q25 = float(values.quantile(0.25))
+    q75 = float(values.quantile(0.75))
+    return median, q25, q75, median - q25, q75 - median, int(len(values))
+
+
 def _read(paths, source):
     frames = []
     for path in paths:
@@ -57,19 +76,12 @@ def plot_ab_likeness(inputs, embedders, labels, dpi, out_figure, out_data):
                         chain_type.casefold()
                     )
                 )
-                log_likelihoods = pd.to_numeric(
-                    frame.loc[selected, column], errors="coerce"
-                ).dropna()
-                values = np.exp(-log_likelihoods)
-                median = values.median()
-                q25, q75 = (
-                    values.quantile([0.25, 0.75])
-                    if len(values)
-                    else (np.nan, np.nan)
+                median, q25, q75, low, high, count = _perplexity_bar(
+                    frame.loc[selected, column]
                 )
                 medians.append(median)
-                lower.append(median - q25)
-                upper.append(q75 - median)
+                lower.append(low)
+                upper.append(high)
                 summary.append({
                     "embedder": tag,
                     "chain_type": chain_type,
@@ -79,7 +91,7 @@ def plot_ab_likeness(inputs, embedders, labels, dpi, out_figure, out_data):
                     "median": median,
                     "q25": q25,
                     "q75": q75,
-                    "n": len(values),
+                    "n": count,
                 })
             chain_statistics[chain_type] = (medians, lower, upper)
         if not any(item["score_source"] == source and item["n"] > 0 for item in summary):

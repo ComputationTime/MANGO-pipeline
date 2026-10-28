@@ -236,6 +236,18 @@ class AnalysisModuleTests(unittest.TestCase):
             set(ab_likeness_summary["chain_type"]), {"Heavy", "Light"}
         )
         self.assertEqual(len(ab_likeness_summary), 3 * len(embedders) * 2)
+        heavy_iglm = [-1.0, -1.2, -1.4]
+        expected = plot_ab_likeness._perplexity_bar(heavy_iglm)
+        observed = ab_likeness_summary.loc[
+            (ab_likeness_summary.embedder == "one_hot")
+            & (ab_likeness_summary.chain_type == "Heavy")
+            & (ab_likeness_summary.score_source == "iglm")
+        ].iloc[0]
+        self.assertAlmostEqual(observed["median"], expected[0])
+        self.assertAlmostEqual(observed["q25"], expected[1])
+        self.assertAlmostEqual(observed["q75"], expected[2])
+        self.assertGreater(expected[4], 0)
+        self.assertEqual(int(observed["n"]), 3)
         plot_germline.plot_germline(
             germline_paths, embedders, labels, 80,
             self.root / "fig4.png", self.root / "fig4.csv"
@@ -244,13 +256,33 @@ class AnalysisModuleTests(unittest.TestCase):
             bio_paths, embedders, labels, 80,
             self.root / "fig5.png", self.root / "fig5.csv"
         )
-        plot_genes.plot_all_embedder_genes(
-            germline_paths,
-            embedders,
-            labels,
-            self.root / "fig6.png",
-            self.root / "fig6.csv",
-            80,
+        captured = {}
+        original_save = plot_genes.pc.save
+
+        def capture_save(fig, data, out_figure, out_data, dpi):
+            captured["scales"] = [ax.get_yscale() for ax in fig.axes]
+            captured["xlabels"] = [ax.get_xlabel() for ax in fig.axes]
+            captured["ylabels"] = [ax.get_ylabel() for ax in fig.axes]
+            return original_save(fig, data, out_figure, out_data, dpi)
+
+        plot_genes.pc.save = capture_save
+        try:
+            plot_genes.plot_all_embedder_genes(
+                germline_paths,
+                embedders,
+                labels,
+                self.root / "fig6.png",
+                self.root / "fig6.csv",
+                80,
+            )
+        finally:
+            plot_genes.pc.save = original_save
+        self.assertEqual(captured["scales"], ["log", "log", "log"])
+        self.assertEqual(
+            captured["ylabels"][2], plot_genes.SPECIES_YLABEL
+        )
+        self.assertEqual(
+            captured["xlabels"][2], plot_genes.SPECIES_XLABEL
         )
         for figure in ("fig1.png", "fig3.png", "fig4.png", "fig5.png", "fig6.png"):
             self.assertGreater((self.root / figure).stat().st_size, 0)
