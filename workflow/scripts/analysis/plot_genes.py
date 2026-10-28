@@ -12,10 +12,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import plot_common as pc
 
 
+SPECIES_XLABEL = "Species as identified by ANARCI"
+SPECIES_YLABEL = "Count"
+
+
 def _read_inputs(file_paths):
     if isinstance(file_paths, (str, Path)):
         file_paths = [file_paths]
     return pd.concat([pd.read_csv(path) for path in file_paths], ignore_index=True)
+
+
+def _log_count_scale(ax):
+    """Use a log count axis so rare families remain visible beside common ones."""
+    ax.set_yscale("log")
 
 
 def plot_species_distribution(
@@ -50,26 +59,32 @@ def plot_species_distribution(
     sns.countplot(
         data=valid,
         x="germline_species",
-        hue="germline_species",
-        hue_order=species_order,
+        hue="embedder",
+        hue_order=embedders,
         order=species_order,
-        palette="colorblind",
-        legend=False,
+        palette=cmap,
         ax=ax,
     )
     pc.style(
         ax,
         "Nearest-germline species assigned by ANARCI",
-        xlabel="Species",
-        ylabel="Number of sequences",
+        xlabel=SPECIES_XLABEL,
+        ylabel=SPECIES_YLABEL,
     )
+    _log_count_scale(ax)
     legend = ax.get_legend()
-    if len(embedders) == 1 and legend is not None:
+    if legend is not None:
         legend.remove()
-    elif legend is not None:
-        legend.set_title("Antigen representation")
-        for text, tag in zip(legend.get_texts(), embedders):
-            text.set_text(labels.get(tag, tag))
+    if len(embedders) > 1:
+        pc.add_axes_legend(
+            ax,
+            embedders,
+            labels,
+            cmap,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.30),
+            ncol=min(4, len(embedders)),
+        )
 
     summary = (
         valid.groupby(["embedder", "germline_species"])
@@ -97,23 +112,27 @@ def plot_all_embedder_genes(
         if col not in df.columns:
             raise ValueError(f"The CSV must contain the column {col!r}.")
 
-    def club_v_family(gene):
+    def club_family(gene, segment):
+        """Return the IMGT family, such as IGHV3 from IGHV3-23*01.
+
+        The locus letter is kept. Heavy, kappa, and lambda calls must not
+        collapse into one IGV or IGJ bucket.
+        """
         if pd.isna(gene):
             return None
-        gene_str = str(gene).upper()
-        match = re.search(r"V(\d+)", gene_str)
-        if match:
-            return f"IGV{match.group(1)}"
-        return None
+        match = re.match(
+            rf"(IG[HKL]{segment})(\d+)",
+            str(gene).upper().split("*", 1)[0],
+        )
+        if match is None:
+            return None
+        return f"{match.group(1)}{match.group(2)}"
+
+    def club_v_family(gene):
+        return club_family(gene, "V")
 
     def club_j_family(gene):
-        if pd.isna(gene):
-            return None
-        gene_str = str(gene).upper()
-        match = re.search(r"J(\d+)", gene_str)
-        if match:
-            return f"IGJ{match.group(1)}"
-        return None
+        return club_family(gene, "J")
 
     df["v_family"] = df["v_gene"].apply(club_v_family)
     df["j_family"] = df["j_gene"].apply(club_j_family)
@@ -123,7 +142,12 @@ def plot_all_embedder_genes(
         raise RuntimeError("No valid V or J gene families could be extracted.")
 
     sns.set_theme(style="whitegrid")
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(
+        1,
+        3,
+        figsize=(19.5, 6),
+        gridspec_kw={"width_ratios": [1.25, 1, 1]},
+    )
 
     v_order = df_plot["v_family"].value_counts().index
     j_order = df_plot["j_family"].value_counts().index
@@ -137,11 +161,13 @@ def plot_all_embedder_genes(
         palette=cmap,
         ax=axes[0],
         order=v_order,
+        width=0.95,
     )
     axes[0].set_title("")
     axes[0].set_xlabel("V Gene Family", fontsize=12)
     axes[0].set_ylabel("Count", fontsize=12)
     axes[0].tick_params(axis="x", rotation=45)
+    _log_count_scale(axes[0])
 
     sns.countplot(
         data=df_plot,
@@ -156,6 +182,7 @@ def plot_all_embedder_genes(
     axes[1].set_xlabel("J Gene Family", fontsize=12)
     axes[1].set_ylabel("Count", fontsize=12)
     axes[1].tick_params(axis="x", rotation=45)
+    _log_count_scale(axes[1])
 
     species_summary = []
     if "germline_species" not in species_df:
@@ -163,8 +190,8 @@ def plot_all_embedder_genes(
             axes[2],
             "",
             "No ANARCI species assignments available",
-            xlabel="Nearest-germline species assigned by ANARCI",
-            ylabel="Number of sequences identified by ANARCI",
+            xlabel=SPECIES_XLABEL,
+            ylabel=SPECIES_YLABEL,
         )
     else:
         assigned = species_df.copy()
@@ -177,8 +204,8 @@ def plot_all_embedder_genes(
                 axes[2],
                 "",
                 "No ANARCI species assignments available",
-                xlabel="Nearest-germline species assigned by ANARCI",
-                ylabel="Number of sequences identified by ANARCI",
+                xlabel=SPECIES_XLABEL,
+                ylabel=SPECIES_YLABEL,
             )
         else:
             species_order = assigned["germline_species"].value_counts().index.tolist()
@@ -196,13 +223,10 @@ def plot_all_embedder_genes(
                 ax=axes[2],
             )
             axes[2].set_title("")
-            axes[2].set_xlabel(
-                "Nearest-germline species assigned by ANARCI", fontsize=12
-            )
-            axes[2].set_ylabel(
-                "Number of sequences identified by ANARCI", fontsize=12
-            )
+            axes[2].set_xlabel(SPECIES_XLABEL, fontsize=12)
+            axes[2].set_ylabel(SPECIES_YLABEL, fontsize=12)
             axes[2].tick_params(axis="x", rotation=45)
+            _log_count_scale(axes[2])
             species_legend = axes[2].get_legend()
             if species_legend is not None:
                 species_legend.remove()
@@ -219,20 +243,14 @@ def plot_all_embedder_genes(
             if species
         ]
 
-    handles, raw_legend_labels = axes[0].get_legend_handles_labels()
-    for ax in axes[:2]:
+    for ax in axes:
         legend = ax.get_legend()
         if legend is not None:
             legend.remove()
-    fig.legend(
-        handles,
-        [labels.get(tag, tag) for tag in raw_legend_labels],
-        title="Embedder",
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.01),
-        ncol=min(4, len(raw_legend_labels)),
-        frameon=False,
-    )
+    pc.add_legend(fig, embedders, labels, cmap)
+    # Reserve space for the shared bottom legend without changing the normal
+    # height or allowing labels to be cropped.
+    fig._mango_layout_rect = (0.03, 0.17, 0.96, 0.92)
 
     gene_summary = []
     for segment, column in (("V", "v_family"), ("J", "j_family")):

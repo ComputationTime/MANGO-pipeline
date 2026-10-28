@@ -109,6 +109,7 @@ def generate_all(
     input_root,
     structure_root,
     predictions_csv,
+    biophysical_csv,
     output_dir,
     embedders,
     dpi,
@@ -117,6 +118,9 @@ def generate_all(
     input_root = Path(input_root)
     structure_root = Path(structure_root)
     predictions_csv = _existing(predictions_csv)
+    biophysical_csv = _existing(
+        predictions_csv if biophysical_csv is None else biophysical_csv
+    )
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -193,7 +197,7 @@ def generate_all(
         output_dir / "fig4_ld_germline_data.csv",
     )
     plot_developability.plot_developability(
-        [predictions_csv],
+        [biophysical_csv],
         tags,
         labels,
         dpi,
@@ -207,7 +211,7 @@ def generate_all(
         output_dir / "fig6_gene_families.png",
         output_dir / "fig6_gene_families_data.csv",
         dpi,
-        species_paths=metrics["germline"],
+        species_paths=predictions_csv,
     )
 
     rosetta_paths = _structure_inputs(structure_root, "rosetta")
@@ -222,9 +226,13 @@ def generate_all(
         "input_root": str(input_root),
         "structure_root": str(structure_root),
         "predictions_csv": str(predictions_csv),
+        "biophysical_csv": str(biophysical_csv),
         "embedders": tags,
         "structure_embedders": structure_tags,
-        "figures": sorted(path.name for path in output_dir.glob("*.png")),
+        "figures": sorted(
+            str(path.relative_to(output_dir))
+            for path in output_dir.rglob("*.png")
+        ),
     }
     (output_dir / "plot_manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"
@@ -263,6 +271,14 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--biophysical-csv",
+        type=Path,
+        help=(
+            "Optional independently scored biophysical table; defaults to "
+            "--predictions-csv"
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=repo_root / "artifacts" / "analysis" / "plot_preview",
@@ -290,6 +306,7 @@ def main():
         args.input_root,
         args.structure_root,
         args.predictions_csv,
+        args.biophysical_csv,
         args.output_dir,
         args.embedders,
         args.dpi,
