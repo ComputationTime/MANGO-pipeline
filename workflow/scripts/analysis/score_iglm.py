@@ -3,28 +3,40 @@
 from pathlib import Path
 import sys
 
-import pandas as pd
 from iglm import IgLM
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+import chain_common
 import device_common as dc
 
 
-def score_iglm(cohort_csv, chain_token, species_token, out_csv):
+def score_iglm(
+    cohort_csv,
+    chain_token,
+    species_token,
+    out_csv,
+    light_chain_token="[LIGHT]",
+):
     dc.get_device("IgLM scoring")
-    df = pd.read_csv(cohort_csv, dtype={"sequence": str}, keep_default_na=False)
+    df = chain_common.read_chain_rows(cohort_csv)
     model = IgLM()
-    scores, statuses = [], []
-    for sequence in df["sequence"]:
+    scores, statuses, chain_tokens = [], [], []
+    for sequence, chain_type in zip(df["sequence"], df["chain_type"]):
+        selected_token = chain_token if chain_type == "Heavy" else light_chain_token
+        chain_tokens.append(selected_token)
         try:
-            scores.append(float(model.log_likelihood(sequence, chain_token, species_token)))
+            scores.append(
+                float(model.log_likelihood(sequence, selected_token, species_token))
+            )
             statuses.append("ok")
         except Exception as exc:
             scores.append(float("nan"))
             statuses.append(f"error: {type(exc).__name__}: {exc}")
     df["iglm_log_likelihood"] = scores
     df["iglm_status"] = statuses
-    df["iglm_chain_token"] = chain_token
+    df["iglm_chain_token"] = chain_tokens
     df["iglm_species_token"] = species_token
     Path(out_csv).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_csv, index=False)
@@ -47,10 +59,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--cohort", required=True)
     p.add_argument("--chain-token", default="[HEAVY]")
+    p.add_argument("--light-chain-token", default="[LIGHT]")
     p.add_argument("--species-token", default="[HUMAN]")
     p.add_argument("--out", required=True)
     a = p.parse_args()
-    score_iglm(a.cohort, a.chain_token, a.species_token, a.out)
+    score_iglm(
+        a.cohort,
+        a.chain_token,
+        a.species_token,
+        a.out,
+        light_chain_token=a.light_chain_token,
+    )
 
 
 if __name__ == "__main__":

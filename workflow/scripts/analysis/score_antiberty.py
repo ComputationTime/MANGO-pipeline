@@ -1,52 +1,40 @@
-"""Score generated heavy chains with AntiBERTy pseudo-log-likelihood."""
+"""Score generated chains with AntiBERTy's library pseudo-log-likelihood."""
 
+import inspect
 import sys
-
 from pathlib import Path
 
-import pandas as pd
-import torch
 from antiberty import AntiBERTyRunner
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+import chain_common
 import device_common as dc
 
 
-def _pseudo_log_likelihood(model, sequence, batch_size):
-    """AntiBERTy's masked-residue PLL with labels on the model's device."""
-    masked = []
-    for i in range(len(sequence)):
-        tokens = list(sequence)
-        tokens[i] = "[MASK]"
-        masked.append(" ".join(tokens))
-    encoded = model.tokenizer(masked, return_tensors="pt", padding=True)
-    tokens = encoded["input_ids"].to(model.device)
-    attention = encoded["attention_mask"].to(model.device)
-    logits = []
-    with torch.no_grad():
-        for start in range(0, len(masked), int(batch_size)):
-            stop = min(start + int(batch_size), len(masked))
-            output = model.model(input_ids=tokens[start:stop],
-                                 attention_mask=attention[start:stop])
-            logits.append(output.prediction_logits)
-    logits = torch.cat(logits, dim=0)
-    logits[:, :, model.tokenizer.all_special_ids] = -float("inf")
-    logits = logits[:, 1:-1]
-    logits = torch.diagonal(logits, dim1=0, dim2=1).unsqueeze(0)
-    labels = model.tokenizer.encode(
-        " ".join(list(sequence)), return_tensors="pt"
-    )[:, 1:-1].to(model.device)
-    return -torch.nn.functional.cross_entropy(logits, labels, reduction="mean").item()
+def _runner(device):
+    """Load AntiBERTy on the selected device when the installed API allows it."""
+    parameters = inspect.signature(AntiBERTyRunner).parameters
+    if "device" in parameters:
+        return AntiBERTyRunner(device=device)
+    return AntiBERTyRunner()
+
+
+def _library_pseudo_log_likelihood(model, sequence, batch_size):
+    """Return AntiBERTyRunner.pseudo_log_likelihood for one sequence."""
+    values = model.pseudo_log_likelihood([sequence], batch_size=int(batch_size))
+    return float(values.detach().reshape(-1)[0].cpu())
 
 
 def score_antiberty(cohort_csv, batch_size, out_csv):
-    dc.get_device("AntiBERTy scoring")
-    df = pd.read_csv(cohort_csv, dtype={"sequence": str}, keep_default_na=False)
-    model = AntiBERTyRunner()
+    device = dc.get_device("AntiBERTy scoring")
+    df = chain_common.read_chain_rows(cohort_csv)
+    model = _runner(device)
     scores, statuses = [], []
     for sequence in df["sequence"]:
         try:
-            scores.append(_pseudo_log_likelihood(model, sequence, batch_size))
+            scores.append(_library_pseudo_log_likelihood(model, sequence, batch_size))
             statuses.append("ok")
         except Exception as exc:
             scores.append(float("nan"))

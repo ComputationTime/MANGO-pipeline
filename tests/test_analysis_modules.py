@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import pandas as pd
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,8 @@ def load(name):
 
 
 select_cohort = load("select_cohort")
+chain_common = load("chain_common")
+score_ablang2 = load("score_ablang2")
 score_biophysical = load("score_biophysical")
 score_germline = load("score_germline")
 plot_nll = load("plot_nll")
@@ -63,6 +66,64 @@ class AnalysisModuleTests(unittest.TestCase):
             selected.append(frame["design_index"].tolist())
             self.assertTrue((frame["light_sequence"] == "DIQMTQ").all())
         self.assertEqual(selected[0], selected[1])
+
+    def test_chain_scorers_keep_long_format_chains_independent(self):
+        rows = []
+        for design_index in (0, 1):
+            common = {
+                "embedder": "one_hot",
+                "run_id": "run",
+                "target_id": "target-a",
+                "split": "test",
+                "design_index": design_index,
+                "status": "ok",
+            }
+            rows.extend([
+                dict(common, chain_type="Heavy", sequence=f"EVQLV{design_index}",
+                     length=6),
+                dict(common, chain_type="Light", sequence=f"DIQMT{design_index}",
+                     length=6),
+            ])
+        path = self._csv("long-antibodies.csv", list(reversed(rows)))
+
+        chains = chain_common.read_chain_rows(path)
+
+        self.assertEqual(len(chains), 4)
+        self.assertEqual(set(chains["chain_type"]), {"Heavy", "Light"})
+        self.assertEqual(
+            set(chains.loc[chains.chain_type == "Heavy", "sequence"]),
+            {"EVQLV0", "EVQLV1"},
+        )
+        self.assertEqual(
+            set(chains.loc[chains.chain_type == "Light", "sequence"]),
+            {"DIQMT0", "DIQMT1"},
+        )
+        self.assertNotIn("light_sequence", chains)
+        self.assertEqual(
+            score_ablang2._independent_model_inputs(
+                chains.sort_values(["design_index", "chain_type"])
+            ),
+            [("EVQLV0", ""), ("", "DIQMT0"), ("EVQLV1", ""), ("", "DIQMT1")],
+        )
+
+    def test_chain_scorers_expand_wide_format_without_pairing(self):
+        path = self._csv("wide-antibodies.csv", [{
+            "embedder": "one_hot",
+            "run_id": "run",
+            "target_id": "target-a",
+            "split": "test",
+            "design_index": 0,
+            "sequence": "EVQLV",
+            "light_sequence": "DIQMT",
+            "length": 5,
+            "status": "ok",
+        }])
+
+        chains = chain_common.read_chain_rows(path)
+
+        self.assertEqual(chains["chain_type"].tolist(), ["Heavy", "Light"])
+        self.assertEqual(chains["sequence"].tolist(), ["EVQLV", "DIQMT"])
+        self.assertNotIn("light_sequence", chains)
 
     def test_biophysical_metrics(self):
         metrics = score_biophysical.score_sequence("ACDEFGHIKLMNPQRSTVWY", 7.4)
@@ -128,18 +189,23 @@ class AnalysisModuleTests(unittest.TestCase):
         for i, tag in enumerate(embedders):
             base = [{"embedder": tag, "run_id": tag, "target_id": "t",
                      "design_index": j, "sequence": "EVQLV"} for j in range(3)]
+            score_base = [
+                dict(row, chain_type=chain_type)
+                for row in base
+                for chain_type in ("Heavy", "Light")
+            ]
             inputs["iglm"].append(self._csv(f"iglm-{tag}.csv", [
                 dict(row, iglm_log_likelihood=-1.0 - i - j / 10)
-                for j, row in enumerate(base)
+                for j, row in enumerate(score_base)
             ]))
             inputs["antiberty"].append(self._csv(f"anti-{tag}.csv", [
                 dict(row, antiberty_pseudo_log_likelihood=-2.0 - i - j / 10)
-                for j, row in enumerate(base)
+                for j, row in enumerate(score_base)
             ]))
             inputs["ablang2"].append(self._csv(f"ablang-{tag}.csv", [
                 dict(row, ablang2_pseudo_log_likelihood=-0.5 - i - j / 10,
                      ablang2_mode="pseudo_log_likelihood", ablang2_status="ok")
-                for j, row in enumerate(base)
+                for j, row in enumerate(score_base)
             ]))
             germline_paths.append(self._csv(f"germline-{tag}.csv", [
                 dict(row, germline_species="human", v_gene="IGHV1", v_identity=.9,
@@ -165,6 +231,23 @@ class AnalysisModuleTests(unittest.TestCase):
         plot_ab_likeness.plot_ab_likeness(
             inputs, embedders, labels, 80, self.root / "fig3.png", self.root / "fig3.csv"
         )
+        ab_likeness_summary = pd.read_csv(self.root / "fig3.csv")
+        self.assertEqual(
+            set(ab_likeness_summary["chain_type"]), {"Heavy", "Light"}
+        )
+        self.assertEqual(len(ab_likeness_summary), 3 * len(embedders) * 2)
+        heavy_iglm = [-1.0, -1.2, -1.4]
+        expected = plot_ab_likeness._perplexity_bar(heavy_iglm)
+        observed = ab_likeness_summary.loc[
+            (ab_likeness_summary.embedder == "one_hot")
+            & (ab_likeness_summary.chain_type == "Heavy")
+            & (ab_likeness_summary.score_source == "iglm")
+        ].iloc[0]
+        self.assertAlmostEqual(observed["median"], expected[0])
+        self.assertAlmostEqual(observed["q25"], expected[1])
+        self.assertAlmostEqual(observed["q75"], expected[2])
+        self.assertGreater(expected[4], 0)
+        self.assertEqual(int(observed["n"]), 3)
         plot_germline.plot_germline(
             germline_paths, embedders, labels, 80,
             self.root / "fig4.png", self.root / "fig4.csv"
@@ -173,16 +256,45 @@ class AnalysisModuleTests(unittest.TestCase):
             bio_paths, embedders, labels, 80,
             self.root / "fig5.png", self.root / "fig5.csv"
         )
-        plot_genes.plot_all_embedder_genes(
-            germline_paths,
-            embedders,
-            labels,
-            self.root / "fig6.png",
-            self.root / "fig6.csv",
-            80,
+        captured = {}
+        original_save = plot_genes.pc.save
+
+        def capture_save(fig, data, out_figure, out_data, dpi):
+            captured["scales"] = [ax.get_yscale() for ax in fig.axes]
+            captured["xlabels"] = [ax.get_xlabel() for ax in fig.axes]
+            captured["ylabels"] = [ax.get_ylabel() for ax in fig.axes]
+            return original_save(fig, data, out_figure, out_data, dpi)
+
+        plot_genes.pc.save = capture_save
+        try:
+            plot_genes.plot_all_embedder_genes(
+                germline_paths,
+                embedders,
+                labels,
+                self.root / "fig6.png",
+                self.root / "fig6.csv",
+                80,
+            )
+        finally:
+            plot_genes.pc.save = original_save
+        self.assertEqual(captured["scales"], ["log", "log", "log"])
+        self.assertEqual(
+            captured["ylabels"][2], plot_genes.SPECIES_YLABEL
+        )
+        self.assertEqual(
+            captured["xlabels"][2], plot_genes.SPECIES_XLABEL
         )
         for figure in ("fig1.png", "fig3.png", "fig4.png", "fig5.png", "fig6.png"):
             self.assertGreater((self.root / figure).stat().st_size, 0)
+        self.assertFalse((self.root / "fig1_subplots").exists())
+        for figure in ("fig3.png", "fig4.png", "fig5.png", "fig6.png"):
+            subplot_dir = self.root / f"{Path(figure).stem}_subplots"
+            subplot_paths = sorted(subplot_dir.glob("*.png"))
+            self.assertTrue(subplot_paths)
+            if figure == "fig3.png":
+                self.assertEqual(len(subplot_paths), 3)
+            with Image.open(subplot_paths[0]) as image:
+                self.assertGreaterEqual(image.info["dpi"][0], 299)
 
 
 if __name__ == "__main__":

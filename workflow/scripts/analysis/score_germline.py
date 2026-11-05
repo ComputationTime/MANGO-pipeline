@@ -74,20 +74,51 @@ def parse_heavy_germline_assignment(detail):
     return parsed
 
 
-def score_germline(cohort_csv, scheme, allowed_species, ncpu, out_csv):
+def _run_anarci_robust(sequences, scheme, allowed_species, ncpu, batch_size=500):
+    """Run ANARCI in bounded batches and isolate sequences that crash a batch."""
     from anarci import anarci
+
+    def run_batch(batch):
+        inputs = [(str(i), sequence) for i, sequence in enumerate(batch)]
+        try:
+            numbered, details, _ = anarci(
+                inputs,
+                scheme=scheme,
+                output=False,
+                allow={"H"},
+                assign_germline=True,
+                allowed_species=(
+                    None if allowed_species is None else list(allowed_species)
+                ),
+                ncpu=int(ncpu),
+            )
+            return list(zip(numbered, details, [None] * len(batch)))
+        except Exception as exc:
+            if len(batch) == 1:
+                message = f"{type(exc).__name__}: {exc}"
+                return [(None, None, message)]
+            midpoint = len(batch) // 2
+            return run_batch(batch[:midpoint]) + run_batch(batch[midpoint:])
+
+    results = []
+    for start in range(0, len(sequences), batch_size):
+        results.extend(run_batch(sequences[start:start + batch_size]))
+    return results
+
+
+def score_germline(cohort_csv, scheme, allowed_species, ncpu, out_csv):
     from anarci.germlines import all_germlines
 
     df = pd.read_csv(cohort_csv, dtype={"sequence": str}, keep_default_na=False)
-    inputs = [(str(i), sequence) for i, sequence in enumerate(df["sequence"])]
-    numbered, details, _ = anarci(
-        inputs, scheme=scheme, output=False, allow={"H"}, assign_germline=True,
-        allowed_species=None if allowed_species is None else list(allowed_species),
-        ncpu=int(ncpu),
+    unique_sequences = list(dict.fromkeys(df["sequence"].astype(str)))
+    unique_results = _run_anarci_robust(
+        unique_sequences, scheme, allowed_species, ncpu
     )
+    results_by_sequence = dict(zip(unique_sequences, unique_results))
 
     annotations = []
-    for i, row in enumerate(df.itertuples(index=False)):
+    for sequence in df["sequence"].astype(str):
+        numbered_result, detail_result, batch_error = results_by_sequence[sequence]
         result = {
             "anarci_scheme": scheme, "anarci_chain_type": "",
             "anarci_hmm_species": "", "germline_species": "", "v_gene": "",
@@ -97,10 +128,13 @@ def score_germline(cohort_csv, scheme, allowed_species, ncpu, out_csv):
             "germline_status": "",
         }
         try:
-            if numbered[i] is None or details[i] is None:
+            if batch_error is not None:
+                raise RuntimeError(batch_error)
+            if numbered_result is None or detail_result is None:
                 raise ValueError("ANARCI found no heavy-chain domain")
             heavy_domains = [
-                (domain, detail) for domain, detail in zip(numbered[i], details[i])
+                (domain, detail)
+                for domain, detail in zip(numbered_result, detail_result)
                 if detail.get("chain_type") == "H"
             ]
             if not heavy_domains:
