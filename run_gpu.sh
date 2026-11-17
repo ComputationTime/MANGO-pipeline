@@ -18,6 +18,10 @@ set -euo pipefail
 #   Side studies (ASD, AbRank, OpenAlphaSeq, affinity, ...): ./experiments/run_experiment.sh
 
 MODE="${1:-smoke}"
+if [[ "$MODE" == "-h" || "$MODE" == "--help" || "$MODE" == "help" ]]; then
+  sed -n '4,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
 case "$MODE" in
   smoke|small|study|train-all|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls|antigen-length-ablation|iglm-baseline) ;;
   *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | train-all | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline" >&2

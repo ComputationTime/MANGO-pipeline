@@ -13,3 +13,12 @@ deleted. Review, then `git rm -r _to_review` when you are happy.
 | `legacy/install_mango.sh` | Compatibility wrapper that only called `run_gpu.sh`. (The side-study helper scripts went to `experiments/`.) |
 
 `artifacts/` was **untracked** (`git rm --cached`) but left on disk.
+
+## Added in Phase 3 (dead code)
+
+| Path | Why |
+|---|---|
+| `legacy/rules/analysis.smk` | Self-declared legacy prototype, never included by the Snakefile. |
+| `legacy/scripts/analysis_{plots,complex_metrics,predict_structures,seq_metrics}.py` | Only used by the dead `analysis.smk`. |
+| `legacy/scripts/{generate_all_plots,watch_training_completion}.py` | No references anywhere. |
+| `legacy/envs/structure_prediction.yaml` | Only used by the dead `analysis.smk`. |
