@@ -1,5 +1,10 @@
 # MANGO agent handoff
 
+> Repository layout after the cleanup (`CLEANUP_PLAN.md`): supported code is `run_gpu.sh`,
+> `workflow/`, `config/`, `mango/`, `tests/`, `docs/`. Side studies live in `experiments/`
+> (unsupported, launched by `experiments/run_experiment.sh`). Files awaiting deletion are in
+> `_to_review/`. `scripts/check.sh` runs the fast CPU-only checks.
+
 This repository is the active MANGO project. Treat this file as persistent
 context for coding agents working on a single NVIDIA GPU cloud instance.
 
@@ -141,7 +146,7 @@ snakemake --lint
 snakemake --sdm conda --cores 1 --dry-run
 ```
 
-Tests may need to run inside their Snakemake Conda environment because the host
+Tests may need to run inside their Snakemake Conda environment (no single env has every dependency; `tests/` and `experiments/tests/` modules each pass in at least one `.snakemake/conda-gpu/*/bin/python`) because the host
 Python intentionally does not contain pandas, PyTorch, or analysis packages.
 Do not treat missing host-Python packages as evidence that the isolated workflow
 environment is broken.
