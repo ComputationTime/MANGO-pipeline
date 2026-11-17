@@ -30,7 +30,7 @@ After smoke succeeds, validate the gated ESM3 and PyRosetta PRE dependencies
 that participate in the full study:
 
 ```bash
-./run_gpu.sh smoke-all
+./run_gpu.sh smoke --all   # legacy spelling: smoke-all
 ```
 
 Only after both smoke outcomes have been understood and fixed run:
