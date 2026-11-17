@@ -380,61 +380,61 @@ species start token, with residues plus EOS scored by the common token mean.
 The baseline has no antigen context and therefore one reference value per split.
 The full `antigen-length-ablation` mode also includes this baseline.
 
-For the separately audited AbRank experiment, use `./run_gpu.sh abrank-transfer`
+For the separately audited AbRank experiment, use `./experiments/run_experiment.sh abrank-transfer`
 after preparing the CATH-protected cohorts. This trains eight controls on
 AbRank, then fine-tunes matching checkpoints on SAbDab2. New plots and results
 stay under `artifacts/experiments/abrank_cath_transfer_v1/`. See
-[the cohort, contamination audit, and transfer protocol](docs/abrank_transfer.md).
+[the cohort, contamination audit, and transfer protocol](experiments/docs/abrank_transfer.md).
 
-The current pretraining test uses **ASD 2.0**: run `./run_gpu.sh asd-transfer`.
+The current pretraining test uses **ASD 2.0**: run `./experiments/run_experiment.sh asd-transfer`.
 It includes all BUZZ affinity bins with positive binding evidence, protects the
 same SAbDab2 validation/test cohorts, and writes separate results under
-`artifacts/experiments/asd_cath_transfer_v1/`. See [the ASD transfer protocol](docs/asd_transfer.md).
+`artifacts/experiments/asd_cath_transfer_v1/`. See [the ASD transfer protocol](experiments/docs/asd_transfer.md).
 
-Use `./download_openalphaseq.sh` to download the complete official OpenAlphaSeq
+Use `./experiments/download_openalphaseq.sh` to download the complete official OpenAlphaSeq
 snapshot into `artifacts/data/openalphaseq/`. It uses standard-library Python,
 pins an immutable revision, checks publisher hashes and reuses verified files.
-See [the download and verification instructions](docs/openalphaseq_download.md).
+See [the download and verification instructions](experiments/docs/openalphaseq_download.md).
 
-Use `./run_gpu.sh asd-loss-comparison` for the eight ESM2 models comparing
+Use `./experiments/run_experiment.sh asd-loss-comparison` for the eight ESM2 models comparing
 standard/focal loss, normal/cross-attention MANGO, and SAbDab2-only/ASD-pretrained
 training. All are evaluated with ordinary NLL on the same native cohort.
-See [the loss comparison protocol](docs/asd_loss_comparison.md).
+See [the loss comparison protocol](experiments/docs/asd_loss_comparison.md).
 
-For rapid iteration, use `./run_gpu.sh asd-prototype`: a HER2-free ASD subset
+For rapid iteration, use `./experiments/run_experiment.sh asd-prototype`: a HER2-free ASD subset
 with 2,000 training records and one epoch per stage for all eight final ESM2
-models. See [the prototype protocol](docs/asd_prototype.md).
+models. See [the prototype protocol](experiments/docs/asd_prototype.md).
 
-After the prototype finishes, `./run_gpu.sh asd-prototype-iglm` adds two matched
+After the prototype finishes, `./experiments/run_experiment.sh asd-prototype-iglm` adds two matched
 IgLM controls: SAbDab2-only and HER2-free ASD → SAbDab2. Both start from random
 weights and use CE with one epoch per stage. It reuses the completed MANGO
 evaluations and writes `plots/sabdab2_loss_comparison_with_iglm.png` / `.csv`
 in the prototype results directory.
 
-Use `./run_gpu.sh antigen-diagnostics` to probe antigen dependence, region NLL
-and cluster uncertainty in the prototype. `./run_gpu.sh antigen-diagnostic-training`
+Use `./experiments/run_experiment.sh antigen-diagnostics` to probe antigen dependence, region NLL
+and cluster uncertainty in the prototype. `./experiments/run_experiment.sh antigen-diagnostic-training`
 runs small controlled follow-ups for target positions, pooling and IgLM warm
-starts. See [the diagnostic protocol](docs/antigen_diagnostics.md).
+starts. See [the diagnostic protocol](experiments/docs/antigen_diagnostics.md).
 
-Use `./run_gpu.sh asd-scaling` for the ASD-only 2,000/4,000-record comparison of
+Use `./experiments/run_experiment.sh asd-scaling` for the ASD-only 2,000/4,000-record comparison of
 IgLM and paired/shuffled ESM2 cross-attention, with fixed held-out targets and
-two-epoch optimization controls. See [the scaling protocol](docs/asd_scaling.md).
-Use `./run_gpu.sh asd-scaling-8k` to append three 8,000-record runs and compare
+two-epoch optimization controls. See [the scaling protocol](experiments/docs/asd_scaling.md).
+Use `./experiments/run_experiment.sh asd-scaling-8k` to append three 8,000-record runs and compare
 them with those frozen baselines. The antigen cap is relaxed for 8k; two antigens
 supply 33% of its records. Held-out targets and the entire 4k training prefix
 remain fixed.
-Use `./run_gpu.sh asd-scaling-16k` to extend the comparison to 16,000 records
+Use `./experiments/run_experiment.sh asd-scaling-16k` to extend the comparison to 16,000 records
 and train regular MANGO with an antigen prefix at 2k/4k/8k/16k. The figure shows
 overall and CDR3 NLL. The dominant antigen requires a partially shuffled 16k
 control; the retained correct-antigen fraction is recorded and shown on the plot.
-Use `./run_gpu.sh asd-scaling-fixed-positions` to add the improved MANGO prefix
+Use `./experiments/run_experiment.sh asd-scaling-fixed-positions` to add the improved MANGO prefix
 variant with antigen-independent antibody positions at all four training sizes.
 
-Use `./run_gpu.sh openalphaseq-pairing` to score the five frozen 16k models on
+Use `./experiments/run_experiment.sh openalphaseq-pairing` to score the five frozen 16k models on
 training-disjoint OpenAlphaSeq antibody domains against the 12-protein target
 panel. It reports annotated-partner retrieval and measured positive/negative
-comparisons separately. See [the external pairing protocol](docs/openalphaseq_pairing.md).
-The [pairing recommendations](docs/openalphaseq_recommendations.md) describe
+comparisons separately. See [the external pairing protocol](experiments/docs/openalphaseq_pairing.md).
+The [pairing recommendations](experiments/docs/openalphaseq_recommendations.md) describe
 the diagnostic findings and a proposed training comparison.
 
 Changing from an older conditioning contract requires fresh training. The

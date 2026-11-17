@@ -1,4 +1,10 @@
 """Position resets must retain antigen attention and agree with cached generation."""
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parents[1]
+for _d in (_ROOT / "workflow" / "scripts", _ROOT / "experiments" / "scripts", _ROOT / "experiments" / "scripts" / "analysis"):
+    if str(_d) not in _sys.path:
+        _sys.path.append(str(_d))
 from pathlib import Path
 import sys
 import unittest

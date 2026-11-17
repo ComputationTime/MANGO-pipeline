@@ -10,6 +10,6 @@ deleted. Review, then `git rm -r _to_review` when you are happy.
 | `docs/site/`, `docs/mango_diagnostic_workflow.html` | Old beginner HTML guide. |
 | `legacy/MANGORunner.py` | Retired pre-workflow runner (raised an error on use). |
 | `legacy/embed_antigen_afm.py`, `legacy/embed_afm.yaml` | AF-M stub embedder; its rule and config entry were removed. |
-| `legacy/*.sh` | `install_mango.sh` (wrapper for `run_gpu.sh`), `download_asd.sh`, `download_openalphaseq.sh`, `run_interface_attention.sh` (side-study helpers). |
+| `legacy/install_mango.sh` | Compatibility wrapper that only called `run_gpu.sh`. (The side-study helper scripts went to `experiments/`.) |
 
 `artifacts/` was **untracked** (`git rm --cached`) but left on disk.
