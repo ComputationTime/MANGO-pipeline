@@ -20,7 +20,7 @@ objectives:
   cross_entropy: {name: cross_entropy}
   focal: {name: focal, gamma: 2.0}
 architectures:
-  mango: antigen_chain_gpt2_v3
+  mango: antigen_chain_fixed_position_gpt2_v1
   cross_attention: antigen_chain_cross_attention_gpt2_v1
 model:
   target_chains: [heavy, light]

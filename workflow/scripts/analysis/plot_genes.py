@@ -111,6 +111,8 @@ def plot_all_embedder_genes(
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"The CSV must contain the column {col!r}.")
+    if df.empty:
+        raise ValueError('No generated sequences are available for gene-family plotting')
 
     def club_family(gene, segment):
         """Return the IMGT family, such as IGHV3 from IGHV3-23*01.
@@ -136,53 +138,27 @@ def plot_all_embedder_genes(
 
     df["v_family"] = df["v_gene"].apply(club_v_family)
     df["j_family"] = df["j_gene"].apply(club_j_family)
-    df_plot = df.dropna(subset=["v_family", "j_family"])
-
-    if df_plot.empty:
-        raise RuntimeError("No valid V or J gene families could be extracted.")
-
     sns.set_theme(style="whitegrid")
     fig, axes = plt.subplots(
-        1,
-        3,
-        figsize=(19.5, 6),
-        gridspec_kw={"width_ratios": [1.25, 1, 1]},
+        1, 3, figsize=(19.5, 6), gridspec_kw={"width_ratios": [1.25, 1, 1]},
     )
-
-    v_order = df_plot["v_family"].value_counts().index
-    j_order = df_plot["j_family"].value_counts().index
     cmap = pc.colors(embedders)
 
-    sns.countplot(
-        data=df_plot,
-        x="v_family",
-        hue="embedder",
-        hue_order=embedders,
-        palette=cmap,
-        ax=axes[0],
-        order=v_order,
-        width=0.95,
-    )
-    axes[0].set_title("")
-    axes[0].set_xlabel("V Gene Family", fontsize=12)
-    axes[0].set_ylabel("Count", fontsize=12)
-    axes[0].tick_params(axis="x", rotation=45)
-    _log_count_scale(axes[0])
-
-    sns.countplot(
-        data=df_plot,
-        x="j_family",
-        hue="embedder",
-        hue_order=embedders,
-        ax=axes[1],
-        order=j_order,
-        palette=cmap,
-    )
-    axes[1].set_title("")
-    axes[1].set_xlabel("J Gene Family", fontsize=12)
-    axes[1].set_ylabel("Count", fontsize=12)
-    axes[1].tick_params(axis="x", rotation=45)
-    _log_count_scale(axes[1])
+    for ax, segment, column in zip(axes, ('V', 'J'), ('v_family', 'j_family')):
+        assigned = df.dropna(subset=[column])
+        if assigned.empty:
+            pc.empty_panel(ax, '', f'ANARCI assigned no {segment} gene families',
+                           xlabel=f'{segment} Gene Family', ylabel='Count')
+        else:
+            options = {'width': 0.95} if segment == 'V' else {}
+            sns.countplot(data=assigned, x=column, hue='embedder', hue_order=embedders,
+                          palette=cmap, ax=ax, order=assigned[column].value_counts().index,
+                          **options)
+            ax.set_title('')
+            ax.set_xlabel(f'{segment} Gene Family', fontsize=12)
+            ax.set_ylabel('Count', fontsize=12)
+            ax.tick_params(axis='x', rotation=45)
+            _log_count_scale(ax)
 
     species_summary = []
     if "germline_species" not in species_df:
@@ -260,11 +236,14 @@ def plot_all_embedder_genes(
                 "embedder": tag,
                 "category": family,
                 "count": int(count),
+                "status": "assigned",
             }
-            for (tag, family), count in df_plot.groupby(
+            for (tag, family), count in df.dropna(subset=[column]).groupby(
                 ["embedder", column]
             ).size().items()
         )
+        gene_summary.extend(dict(plot=segment, embedder=tag, category='', count=int(count), status='unassigned')
+                            for tag, count in df.loc[df[column].isna()].groupby('embedder').size().items())
     pc.save(
         fig,
         pd.DataFrame(gene_summary + species_summary),

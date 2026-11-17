@@ -56,7 +56,7 @@ def _expected_model(method, spec):
     raise ValueError(f"unsupported batch method {method!r}")
 
 
-def _can_reuse(path, row, tag, method, expected_model, dependencies):
+def _can_reuse(path, row, tag, method, expected_model, dependencies, representation=None):
     target = Path(path)
     if not target.is_file():
         return False
@@ -70,6 +70,7 @@ def _can_reuse(path, row, tag, method, expected_model, dependencies):
             and payload.get("model_name") == expected_model
             and isinstance(payload.get("shape"), list)
             and payload.get("embedding") is not None
+            and (representation is None or payload.get('representation') == representation)
         )
     except Exception:
         return False
@@ -108,7 +109,7 @@ def _embed_one(module, method, records_csv, row, out, seq_source, tag, spec,
     if method == "esm3":
         return module.esm3(
             records_csv, record_id, out, seq_source, spec["model_name"], tag,
-            row=row, runtime=runtime,
+            row=row, runtime=runtime, representation=spec.get('representation', 'sequence'),
         )
     cif = row["pdb_path"]
     if not Path(cif).is_file():
@@ -165,12 +166,14 @@ def batch_embed(records_csv, output_dir, marker, kind, tag, method, spec,
             source = module.control_source_path(row, spec)
             if source is not None:
                 dependencies.append(str(source))
-        if method in {"esmif", "proteinmpnn", "pyrosetta_pre"}:
+        if method in {"esmif", "proteinmpnn", "pyrosetta_pre"} or (
+                method == 'esm3' and spec.get('representation') == 'sequence_structure'):
             dependencies.append(row["pdb_path"])
         if weights:
             dependencies.append(weights)
         if not signature_changed and _can_reuse(
-            out, row, tag, method, expected_model, dependencies
+            out, row, tag, method, expected_model, dependencies,
+            representation=spec.get('representation', 'sequence') if method == 'esm3' else None,
         ):
             reused += 1
         else:

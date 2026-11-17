@@ -39,12 +39,16 @@ The launcher is the supported cloud interface; `mango/MANGORunner.py` is legacy.
 
 ## Current supported scope
 
-The default full `study` runs all seven implemented antigen representations,
+The default full `study` runs all eight implemented antigen representations,
 sequentially on one GPU: `one_hot`, `biopython`, `pyrosetta_pre`, `esm2`,
-`esm3`, `esmif`, and `proteinmpnn`. Plain `smoke` and `small` retain the five
-non-gated validation methods; use `smoke-all` before the seven-method study.
+`esm3`, `esm3_structure`, `esmif`, and `proteinmpnn`. Plain `smoke` and `small` retain the five
+non-gated validation methods; use `smoke-all` before the eight-method study.
 
-- ESM3 requires `HF_TOKEN` after accepting the Hugging Face model terms.
+- ESM3 requires `HF_TOKEN` for uncached weights after accepting the Hugging Face model terms.
+  Keep both sequence-only and sequence-plus-structure variants; the structural
+  variant uses only antigen coordinates, with explicit multichain breaks.
+- On the local RTX 4070, use `MANGO_EXECUTION_CONFIG=config/local_12gb.yaml`.
+  GPU commands require access outside the filesystem sandbox on this host.
 - PyRosetta PRE participates in the full study, but its real mmCIF chain mapping
   still needs validation in `smoke-all` before its scientific results are used.
 - Fixed-backbone Rosetta `InterfaceAnalyzer` scoring is different from the PRE

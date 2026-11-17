@@ -109,6 +109,22 @@ class AntigenLengthPlotTests(unittest.TestCase):
                     plot_antigen_length_ablation(*args, 100, root / "plot.png", root / "data.csv")
                 self.assertFalse((root / "plot.png").exists())
 
+    def test_fixed_positions_are_supported_without_mixing_legacy_results(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = self.fixture(root)
+            for path in args[0]:
+                payload = json.loads(path.read_text())
+                payload['architecture'] = 'antigen_chain_fixed_position_gpt2_v1'
+                path.write_text(json.dumps(payload))
+            plot_antigen_length_ablation(*args, 100, root / 'plot.png', root / 'data.csv')
+            payload = json.loads(args[0][0].read_text())
+            payload['architecture'] = 'antigen_chain_gpt2_v3'
+            args[0][0].write_text(json.dumps(payload))
+            with self.assertRaisesRegex(ValueError, 'prefix architecture'):
+                plot_antigen_length_ablation(*args, 100, root / 'mixed.png', root / 'mixed.csv')
+            self.assertFalse((root / 'mixed.png').exists())
+
     def test_missing_context_level_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

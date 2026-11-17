@@ -4,7 +4,8 @@ set -euo pipefail
 # One-command local NVIDIA GPU runner.
 #   ./run_gpu.sh smoke        five-record plumbing run (default)
 #   ./run_gpu.sh small        bounded multi-record validation run
-#   ./run_gpu.sh study        full seven-embedder SAbDab2 study
+#   ./run_gpu.sh study        full eight-embedder SAbDab2 study
+#   ./run_gpu.sh train-all    train/evaluate all eight models and matched scratch IgLM
 #   ./run_gpu.sh smoke-esm3   smoke + gated ESM3
 #   ./run_gpu.sh study-esm3   full study + gated ESM3
 #   ./run_gpu.sh smoke-pyrosetta / study-pyrosetta
@@ -25,11 +26,25 @@ set -euo pipefail
 #   ./run_gpu.sh asd-scaling-8k (extend the frozen comparison to 8k records)
 #   ./run_gpu.sh asd-scaling-16k (16k extension and regular MANGO at every size)
 #   ./run_gpu.sh asd-scaling-fixed-positions (add fixed-position MANGO at every size)
+#   ./run_gpu.sh openalphaseq-pairing (external pairing benchmark of frozen 16k models)
+#   ./run_gpu.sh openalphaseq-affinity (full dataset affinity correlations for train-all)
+#   ./run_gpu.sh binding-affinity (local HER2/PD1/TIGIT CSVs; eight MANGO models + IgLM)
+#   ./run_gpu.sh affinity-improvement-{smoke,study} (completion-driven controlled experiments)
+#   ./run_gpu.sh controlled-antigen-{smoke,study} (decoder-matched antigen ablations)
+#   ./run_gpu.sh short-affinity-{smoke,study} (bounded six-test affinity screen)
+#   ./run_gpu.sh native-mechanism-{smoke,study} (fixed-budget matched mechanism pilot)
+#   ./run_gpu.sh native-mechanism-audit (protected native cohort feasibility)
+#   ./run_gpu.sh legacy-adapter-affinity (frozen adapter affinity comparison; no fitting)
+#   ./run_gpu.sh affinity-bottleneck-audit (typed grouping and affinity-source curation)
 
 MODE="${1:-smoke}"
 case "$MODE" in
-  smoke|small|study|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls|antigen-length-ablation|iglm-baseline|abrank-transfer|asd-transfer|asd-loss-comparison|asd-prototype|asd-prototype-iglm|antigen-diagnostics|antigen-diagnostic-training|asd-scaling|asd-scaling-8k|asd-scaling-16k|asd-scaling-fixed-positions) ;;
-  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline | abrank-transfer | asd-transfer | asd-loss-comparison | asd-prototype | asd-prototype-iglm | antigen-diagnostics | antigen-diagnostic-training | asd-scaling | asd-scaling-8k | asd-scaling-16k | asd-scaling-fixed-positions" >&2; exit 2 ;;
+  interface-supervision|interface-supervision-smoke) ;;
+  epitope-diagnostics|epitope-diagnostics-smoke) ;;
+  affinity-ranking-pilot|affinity-ranking-pilot-smoke) ;;
+  affinity-bottleneck-audit) ;;
+  smoke|small|study|train-all|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls|antigen-length-ablation|iglm-baseline|abrank-transfer|asd-transfer|asd-loss-comparison|asd-prototype|asd-prototype-iglm|antigen-diagnostics|antigen-diagnostic-training|asd-scaling|asd-scaling-8k|asd-scaling-16k|asd-scaling-fixed-positions|openalphaseq-pairing|openalphaseq-affinity|binding-affinity|affinity-improvement-smoke|affinity-improvement-study|controlled-antigen-smoke|controlled-antigen-study|short-affinity-smoke|short-affinity-study|native-mechanism-audit|native-mechanism-smoke|native-mechanism-study|legacy-adapter-affinity) ;;
+  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline | abrank-transfer | asd-transfer | asd-loss-comparison | asd-prototype | asd-prototype-iglm | antigen-diagnostics | antigen-diagnostic-training | asd-scaling | asd-scaling-8k | asd-scaling-16k | asd-scaling-fixed-positions | openalphaseq-pairing" >&2; exit 2 ;;
 esac
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -78,6 +93,141 @@ if [[ ! -x "$DRIVER/bin/snakemake" ]]; then
     --strict-channel-priority python=3.11 pip
   "$DRIVER/bin/pip" install --no-cache-dir \
     snakemake==9.25.1 pandas==2.3.3
+fi
+
+if [[ "$MODE" == "interface-supervision" || "$MODE" == "interface-supervision-smoke" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  if [[ "$MODE" == "interface-supervision-smoke" ]]; then
+    "$DRIVER/bin/python" - <<'PY'
+from pathlib import Path
+import yaml
+cfg=yaml.safe_load(Path('config/interface_supervision.yaml').read_text())
+root=Path('artifacts/experiments/interface_supervision_smoke_v1');root.mkdir(parents=True,exist_ok=True)
+cfg.update(experiment_root=str(root),smoke=True,seeds=[300],pretraining_updates=2,adaptation_updates=2)
+(root/'config.yaml').write_text(yaml.safe_dump(cfg))
+PY
+    export MANGO_INTERFACE_CONFIG=artifacts/experiments/interface_supervision_smoke_v1/config.yaml
+  fi
+  exec "$DRIVER/bin/snakemake" -s workflow/interface_supervision.smk --profile workflow/profiles/gpu --rerun-incomplete
+fi
+
+if [[ "$MODE" == "epitope-diagnostics" || "$MODE" == "epitope-diagnostics-smoke" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  if [[ "$MODE" == "epitope-diagnostics-smoke" ]]; then
+    "$DRIVER/bin/python" - <<'PY'
+from pathlib import Path
+import yaml
+cfg=yaml.safe_load(Path('config/epitope_diagnostics.yaml').read_text())
+root=Path('artifacts/experiments/epitope_diagnostics_smoke_v2');root.mkdir(parents=True,exist_ok=True)
+cfg.update(experiment_root=str(root),smoke=True,seeds=[200])
+(root/'config.yaml').write_text(yaml.safe_dump(cfg))
+PY
+    export MANGO_EPITOPE_CONFIG=artifacts/experiments/epitope_diagnostics_smoke_v2/config.yaml
+  fi
+  exec "$DRIVER/bin/snakemake" -s workflow/epitope_diagnostics.smk --profile workflow/profiles/gpu --rerun-incomplete
+fi
+
+if [[ "$MODE" == "affinity-ranking-pilot" || "$MODE" == "affinity-ranking-pilot-smoke" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  if [[ "$MODE" == "affinity-ranking-pilot-smoke" ]]; then
+    "$DRIVER/bin/python" - <<'PY'
+from pathlib import Path
+import yaml
+cfg=yaml.safe_load(Path('config/affinity_ranking_pilot.yaml').read_text())
+root=Path('artifacts/experiments/affinity_ranking_pilot_smoke_v1');root.mkdir(parents=True,exist_ok=True)
+cfg.update(experiment_root=str(root),smoke=True,seeds=[200],pretraining_updates=2,adaptation_updates=2)
+(root/'config.yaml').write_text(yaml.safe_dump(cfg))
+PY
+    export MANGO_RANKING_PILOT_CONFIG=artifacts/experiments/affinity_ranking_pilot_smoke_v1/config.yaml
+  fi
+  exec "$DRIVER/bin/snakemake" -s workflow/affinity_ranking_pilot.smk \
+    --profile workflow/profiles/gpu --rerun-incomplete
+fi
+
+if [[ "$MODE" == "affinity-bottleneck-audit" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  exec "$DRIVER/bin/snakemake" -s workflow/affinity_bottleneck.smk \
+    --profile workflow/profiles/gpu --rerun-incomplete
+fi
+
+if [[ "$MODE" == "native-mechanism-audit" ]]; then
+  exec "$DRIVER/bin/snakemake" -s workflow/native_mechanism.smk \
+    --profile workflow/profiles/gpu --rerun-incomplete
+fi
+
+if [[ "$MODE" == "legacy-adapter-affinity" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  exec "$DRIVER/bin/python" workflow/scripts/legacy_adapter_affinity.py run \
+    --config "${MANGO_ADAPTER_AFFINITY_CONFIG:-config/legacy_adapter_affinity.yaml}"
+fi
+
+if [[ "$MODE" == "native-mechanism-smoke" || "$MODE" == "native-mechanism-study" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  NATIVE_ARGS=(--config "${MANGO_NATIVE_MECHANISM_CONFIG:-config/native_mechanism_pilot_v2.yaml}")
+  if [[ "$MODE" == "native-mechanism-smoke" ]]; then NATIVE_ARGS+=(--smoke); fi
+  exec "$DRIVER/bin/python" workflow/scripts/run_native_mechanism.py "${NATIVE_ARGS[@]}"
+fi
+
+if [[ "$MODE" == "short-affinity-smoke" || "$MODE" == "short-affinity-study" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  SHORT_ARGS=(--config "${MANGO_SHORT_CONFIG:-config/short_affinity_tests.yaml}")
+  if [[ "$MODE" == "short-affinity-smoke" ]]; then
+    SHORT_ARGS+=(--smoke)
+  fi
+  exec "$DRIVER/bin/python" workflow/scripts/run_short_affinity.py "${SHORT_ARGS[@]}"
+fi
+
+if [[ "$MODE" == "controlled-antigen-smoke" || "$MODE" == "controlled-antigen-study" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  CONTROLLED_ARGS=(--config "${MANGO_CONTROLLED_CONFIG:-config/controlled_antigen_study.yaml}")
+  if [[ "$MODE" == "controlled-antigen-smoke" ]]; then
+    CONTROLLED_ARGS+=(--smoke)
+  fi
+  exec "$DRIVER/bin/python" workflow/scripts/run_controlled_antigen.py "${CONTROLLED_ARGS[@]}"
+fi
+
+if [[ "$MODE" == "affinity-improvement-smoke" || "$MODE" == "affinity-improvement-study" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  IMPROVEMENT_ARGS=(--config "${MANGO_AFFINITY_STUDY_CONFIG:-config/affinity_improvement_study.yaml}")
+  if [[ "$MODE" == "affinity-improvement-smoke" ]]; then
+    IMPROVEMENT_ARGS+=(--smoke)
+  fi
+  exec "$DRIVER/bin/python" workflow/scripts/run_affinity_study.py "${IMPROVEMENT_ARGS[@]}"
+fi
+
+if [[ "$MODE" == "openalphaseq-pairing" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  exec "$DRIVER/bin/snakemake" -s workflow/openalphaseq_pairing.smk \
+    --profile workflow/profiles/gpu --rerun-incomplete
+fi
+
+if [[ "$MODE" == "openalphaseq-affinity" || "$MODE" == "binding-affinity" ]]; then
+  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
+  AFFINITY_ROOT=artifacts/experiments/openalphaseq_affinity_full_v1
+  AFFINITY_WORKFLOW=workflow/openalphaseq_affinity.smk
+  if [[ "$MODE" == "binding-affinity" ]]; then
+    AFFINITY_ROOT=artifacts/experiments/mango_binding_affinity
+    AFFINITY_WORKFLOW=workflow/mango_binding_affinity.smk
+  fi
+  AFFINITY_SNAKE=("$DRIVER/bin/snakemake" -s "$AFFINITY_WORKFLOW"
+    --profile workflow/profiles/gpu --rerun-incomplete --rerun-triggers mtime)
+  "${AFFINITY_SNAKE[@]}" -- "$AFFINITY_ROOT/measurements_complete.json"
+  RUN_FAILED=0
+  # Separate invocations keep an optional embedder environment failure from
+  # preventing every other model's correlation. GPU work remains sequential.
+  for model in one_hot biopython esm2 esm3 iglm pyrosetta_pre esm3_structure esmif proteinmpnn; do
+    if ! "${AFFINITY_SNAKE[@]}" -- "$AFFINITY_ROOT/scoring/$model.complete.json"; then
+      RUN_FAILED=1
+      echo "[$model] AlphaSeq scoring incomplete; continuing with other models." >&2
+    fi
+  done
+  if ! "${AFFINITY_SNAKE[@]}" --keep-going; then
+    RUN_FAILED=1
+    if [[ "$MODE" == "binding-affinity" ]]; then
+      "${AFFINITY_SNAKE[@]}" -- "$AFFINITY_ROOT/partial/local_summary.json" || true
+    fi
+  fi
+  exit "$RUN_FAILED"
 fi
 
 if [[ "$MODE" == "asd-scaling" || "$MODE" == "asd-scaling-8k" || "$MODE" == "asd-scaling-16k" || "$MODE" == "asd-scaling-fixed-positions" ]]; then
@@ -245,7 +395,9 @@ if [[ "$MODE" == smoke* ]]; then
 elif [[ "$MODE" == small* ]]; then
   CONFIG_ARGS+=(config/small.yaml)
 fi
-if [[ "$MODE" == "study" ]]; then
+if [[ "$MODE" == "train-all" ]]; then
+  CONFIG_ARGS+=(config/gpu_all.yaml config/iglm_baseline.yaml)
+elif [[ "$MODE" == "study" ]]; then
   CONFIG_ARGS+=(config/gpu_all.yaml)
 elif [[ "$MODE" == "esm2-ablation" ]]; then
   CONFIG_ARGS+=(config/esm2_ablation.yaml)
@@ -260,20 +412,27 @@ elif [[ "$MODE" == *-pyrosetta ]]; then
 elif [[ "$MODE" == *-all ]]; then
   CONFIG_ARGS+=(config/gpu_all.yaml)
 fi
+if [[ -n "${MANGO_EXECUTION_CONFIG:-}" ]]; then
+  if [[ ! -f "$MANGO_EXECUTION_CONFIG" ]]; then
+    echo "Execution configuration not found: $MANGO_EXECUTION_CONFIG" >&2
+    exit 2
+  fi
+  CONFIG_ARGS+=("$MANGO_EXECUTION_CONFIG")
+fi
 
 SNAKEMAKE=("$DRIVER/bin/snakemake" -s workflow/Snakefile \
   --profile workflow/profiles/gpu "${CONFIG_ARGS[@]}" --rerun-incomplete)
 
 EMBEDDERS=(one_hot biopython esm2 esmif proteinmpnn)
-if [[ "$MODE" == "study" ]]; then
-  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esmif proteinmpnn)
+if [[ "$MODE" == "study" || "$MODE" == "train-all" ]]; then
+  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esm3_structure esmif proteinmpnn)
 elif [[ "$MODE" == *-pyrosetta || "$MODE" == *-all ]]; then
   EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esmif proteinmpnn)
 fi
 if [[ "$MODE" == *-esm3 ]]; then
-  EMBEDDERS=(one_hot biopython esm2 esm3 esmif proteinmpnn)
+  EMBEDDERS=(one_hot biopython esm2 esm3 esm3_structure esmif proteinmpnn)
 elif [[ "$MODE" == *-all ]]; then
-  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esmif proteinmpnn)
+  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esm3_structure esmif proteinmpnn)
 fi
 
 run_for_embedder() {
@@ -302,7 +461,7 @@ refresh_review_bundle() {
 
 requires_prefetch() {
   case "$1" in
-    pyrosetta_pre|esm2|esm3|esmif|proteinmpnn) return 0 ;;
+    pyrosetta_pre|esm2|esm3|esm3_structure|esmif|proteinmpnn) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -310,6 +469,28 @@ requires_prefetch() {
 # Force the preflight on every invocation so a manifest copied from another
 # machine can never bypass validation of this GPU and driver.
 "${SNAKEMAKE[@]}" --force gpu_preflight
+
+if [[ "$MODE" == "train-all" ]]; then
+  # Same scientific configurations/run IDs as study. External affinity scoring
+  # needs trained likelihood models, without generating/folding de novo designs.
+  RUN_FAILED=0
+  for embedder in "${EMBEDDERS[@]}"; do
+    if ! run_for_embedder "$embedder" weights; then
+      echo "[$embedder] asset setup incomplete; attempting evaluation anyway." >&2
+    fi
+    if ! run_for_embedder "$embedder" evaluate --rerun-triggers mtime; then
+      RUN_FAILED=1
+      echo "[$embedder] training/evaluation incomplete; continuing." >&2
+    fi
+    "$DRIVER/bin/python" workflow/scripts/report_affinity_training.py
+  done
+  if ! "${SNAKEMAKE[@]}" --keep-going iglm_baseline; then
+    RUN_FAILED=1
+  fi
+  "$DRIVER/bin/python" workflow/scripts/report_affinity_training.py
+  echo "Training/evaluation finished; AlphaSeq affinity scoring is a separate stage."
+  exit "$RUN_FAILED"
+fi
 
 if [[ "$MODE" == "iglm-baseline" ]]; then
   if [[ ! -f artifacts/analysis/figures/fig9_antigen_context_length_ablation_data.csv ]]; then

@@ -41,8 +41,9 @@ fetch → standardize → process → embed → train → evaluate
   runs Boltz-2 and Chai-1 on a bounded, cluster-diverse generated subset. TAP
   remains deferred.
 
-The full `study` now includes ESM3 as the sixth representation and PyRosetta
-PRE as the seventh. ESM3 requires accepted Hugging Face terms and `HF_TOKEN`;
+The full `study` trains eight representations: one-hot, BioPython, PyRosetta
+PRE, ESM2, sequence-only ESM3, sequence-plus-structure ESM3, ESM-IF and ProteinMPNN.
+ESM3 requires accepted Hugging Face terms and `HF_TOKEN` for uncached downloads;
 PyRosetta requires academic/non-commercial eligibility, and its PRE results
 must retain the mmCIF chain-mapping validation warning.
 AF-M is a stub. Therapeutic targets, AF3, and TAP remain deferred.
@@ -217,12 +218,20 @@ export HF_TOKEN=...
 Do not start with `study-esm3`: validate the token, environment, and model
 download with `smoke-esm3` first.
 
-Because plain `study` now uses all seven embedders, validate both special
+Because plain `study` now uses all eight embedders, validate both special
 dependencies together before launching it:
 
 ```bash
 ./run_gpu.sh smoke-pyrosetta   # then study-pyrosetta
 ./run_gpu.sh smoke-all         # ESM3 + PyRosetta; then plain study
+```
+
+On the local 12 GB RTX 4070, apply the existing execution overlay to every stage:
+
+```bash
+MANGO_EXECUTION_CONFIG=config/local_12gb.yaml ./run_gpu.sh smoke
+MANGO_EXECUTION_CONFIG=config/local_12gb.yaml ./run_gpu.sh smoke-all
+MANGO_EXECUTION_CONFIG=config/local_12gb.yaml ./run_gpu.sh study
 ```
 
 To check only environments, connectivity, authorization, and weights:
@@ -269,7 +278,7 @@ The main settings are in `config/config.yaml`. In particular:
 
 - `active_embedders` is restricted to `one_hot` in the repository default;
   the launcher combines `config/gpu.yaml` and `config/gpu_all.yaml` for the
-  seven-embedder full study while ordinary smoke retains five embedders.
+  eight-embedder full study while ordinary smoke retains five embedders.
 - `processing.val.cluster_column` identifies the leakage boundary;
   `processing.val.fraction` is the fraction of training clusters held out.
 - `model.*` controls training and early stopping.
@@ -316,21 +325,38 @@ snakemake --sdm conda --cores 1 --dry-run
 AlphaFold-Multimer, AF3, therapeutic targets, and TAP are not included by the
 GPU completion target. Boltz-2 and Chai-1 confidence and Figure 2 are included
 on the bounded default subset. PyRosetta PRE and ESM3 participate in the full
-seven-embedder study and also remain available through focused suffixed modes.
+eight-embedder study and also remain available through focused suffixed modes.
 ESM3 and ESM-IF were adapted from the contributed `mango-embedders` module.
-ESM3 remains sequence-only and gated; ESM-IF encodes antigen chains
-independently rather than as a joint multichain complex.
+The `esm3` baseline remains sequence-only. `esm3_structure` jointly encodes the
+requested antigen chains from their resolved sequences and N/CA/C/O coordinates,
+preserving relative chain placement and explicit chain breaks. Missing atoms
+are masked; sequence/coordinate mismatches fail. Antibody atoms never enter its
+input. The structure-token encoder weights are prefetched along with ESM3.
+ESM-IF encodes antigen chains independently rather than as a joint multichain complex.
 
 The implemented Boltz/Chai contract and intended AF3 ingestion are documented in
 `docs/structure_prediction_plan.md`.
 
 ## Antigen-only model contract
 
-The default architecture is `antigen_chain_gpt2_v3`. Its prefix contains the
+The default architecture is `antigen_chain_fixed_position_gpt2_v1`. Its prefix contains the
 projected antigen representation, one learned heavy/light output selector, and
 the beginning-of-sequence token. A causal GPT-2 decoder then emits the requested
 chain. Only target residues and EOS receive loss; no antibody sequence,
 antibody embedding or species label is accepted as conditioning.
+
+The selector, BOS and first antibody residue always use learned position IDs
+0, 1 and 2, regardless of antigen length. Antigen positions start at zero;
+physical causal attention and KV-cache positions remain monotonic across the
+whole sequence. Training, evaluation, reconstruction and generation share this
+policy. Cross-attention models already use the same antibody positions because
+their antigen memory is separate from the decoder prefix.
+
+Existing `antigen_chain_gpt2_v3` checkpoints load with their original absolute
+position policy for reproducibility. They require fresh training to obtain a
+fixed-position model. The main workflow's architecture-dependent run hash puts
+new models in separate directories. Frozen experiments with explicit output
+roots require a new `experiment_root` when their training configuration changes.
 
 The `antigen-controls` mode also trains `control_cross_attention_esm2`, using
 architecture `antigen_chain_cross_attention_gpt2_v1`. It reuses the same ESM2
@@ -369,6 +395,11 @@ It includes all BUZZ affinity bins with positive binding evidence, protects the
 same SAbDab2 validation/test cohorts, and writes separate results under
 `artifacts/experiments/asd_cath_transfer_v1/`. See [the ASD transfer protocol](docs/asd_transfer.md).
 
+Use `./download_openalphaseq.sh` to download the complete official OpenAlphaSeq
+snapshot into `artifacts/data/openalphaseq/`. It uses standard-library Python,
+pins an immutable revision, checks publisher hashes and reuses verified files.
+See [the download and verification instructions](docs/openalphaseq_download.md).
+
 Use `./run_gpu.sh asd-loss-comparison` for the eight ESM2 models comparing
 standard/focal loss, normal/cross-attention MANGO, and SAbDab2-only/ASD-pretrained
 training. All are evaluated with ordinary NLL on the same native cohort.
@@ -402,6 +433,13 @@ overall and CDR3 NLL. The dominant antigen requires a partially shuffled 16k
 control; the retained correct-antigen fraction is recorded and shown on the plot.
 Use `./run_gpu.sh asd-scaling-fixed-positions` to add the improved MANGO prefix
 variant with antigen-independent antibody positions at all four training sizes.
+
+Use `./run_gpu.sh openalphaseq-pairing` to score the five frozen 16k models on
+training-disjoint OpenAlphaSeq antibody domains against the 12-protein target
+panel. It reports annotated-partner retrieval and measured positive/negative
+comparisons separately. See [the external pairing protocol](docs/openalphaseq_pairing.md).
+The [pairing recommendations](docs/openalphaseq_recommendations.md) describe
+the diagnostic findings and a proposed training comparison.
 
 Changing from an older conditioning contract requires fresh training. The
 architecture participates in run identity, and checkpoint loading rejects older

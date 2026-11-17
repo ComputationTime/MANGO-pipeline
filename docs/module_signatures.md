@@ -352,7 +352,8 @@ labels:     -100 × (m+2)                         t_1 … t_n  >
   "task": "antigen+chain_type->chain",
   "target_chains": ["heavy", "light"],
   "d_ag": 21, "d_model": 488,
-  "architecture": "antigen_chain_gpt2_v3",
+  "architecture": "antigen_chain_fixed_position_gpt2_v1",
+  "fixed_antibody_positions": true,
   "vocab_size": 26, "n_layer": 4, "n_head": 8, "n_positions": 2048 }
 ```
 

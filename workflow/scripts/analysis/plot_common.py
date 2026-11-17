@@ -22,6 +22,7 @@ EMBEDDER_COLORS = {
     "pyrosetta_pre": PALETTE[2],
     "esm2": PALETTE[3],
     "esm3": PALETTE[4],
+    "esm3_structure": "#56B4E9",
     "esmif": PALETTE[5],
     "proteinmpnn": PALETTE[6],
     "afm": PALETTE[7],

@@ -1,14 +1,25 @@
 {
+  "antigen_in_decoder_prefix": true,
+  "architecture": "antigen_chain_gpt2_v3",
   "checkpoint_epoch": 2,
   "checkpoint_val_loss": 0.8366133565955183,
   "cohort_sha256": "03468885503101c7749ab53956c0586585e87772a6b33367d2f73ff88eec6b6f",
+  "cross_attention_trainable_parameters": 0,
   "d_ag": 1280,
   "embedder": "control_pooled_esm2",
+  "embedding_tag": "control_pooled_esm2",
   "experiment_hash": "c88a5373",
+  "initialization": null,
   "loss_reduction": "target_token_mean_including_eos",
   "run_id": "control_pooled_esm2__c88a5373",
   "splits": {
     "test": {
+      "antigen_context_tokens": {
+        "max": 1,
+        "mean": 1.0,
+        "min": 1,
+        "n_records": 426
+      },
       "by_chain": {
         "heavy": {
           "n_examples": 426,
@@ -32,6 +43,12 @@
       "perplexity": 2.3451677568099822
     },
     "train": {
+      "antigen_context_tokens": {
+        "max": 1,
+        "mean": 1.0,
+        "min": 1,
+        "n_records": 2636
+      },
       "by_chain": {
         "heavy": {
           "n_examples": 2636,
@@ -55,6 +72,12 @@
       "perplexity": 1.4637340034881448
     },
     "val": {
+      "antigen_context_tokens": {
+        "max": 1,
+        "mean": 1.0,
+        "min": 1,
+        "n_records": 132
+      },
       "by_chain": {
         "heavy": {
           "n_examples": 132,

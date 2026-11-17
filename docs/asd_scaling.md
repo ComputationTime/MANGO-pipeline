@@ -122,10 +122,14 @@ python workflow/scripts/report_asd_scaling_8k.py --require-complete
 
 Run `./run_gpu.sh asd-scaling-16k`. Seven new models train from random weights:
 16k IgLM, paired cross-attention and shuffled cross-attention, plus **regular
-MANGO at each of 2k/4k/8k/16k**. Regular MANGO uses the supported
+MANGO at each of 2k/4k/8k/16k**. The frozen regular MANGO results used the
 `antigen_chain_gpt2_v3` architecture: projected ESM2 antigen tokens precede the
 learned chain selector and antibody decoder tokens. It retains the standard
-absolute target positions. Cross-attention uses its existing separate antigen
+absolute target positions. New prefix training now defaults to
+`antigen_chain_fixed_position_gpt2_v1`, with selector/BOS/first-residue positions
+0/1/2 independent of antigen length. Frozen scaling manifests also pin their
+prototype configuration; use a new experiment root for changed configurations.
+Cross-attention uses its existing separate antigen
 memory. Every new run uses ordinary CE and exactly one epoch, with the original
 seed/optimizer settings and frozen ESM2 650M. Existing checkpoints and evaluation
 scores are reused. All GPU rules remain serialized.

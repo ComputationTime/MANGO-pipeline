@@ -18,7 +18,7 @@ TAGS = [
 
 
 class AntigenLengthLauncherTests(unittest.TestCase):
-    def launch(self, root, fail_tag="", mode="antigen-length-ablation", fail_target=""):
+    def launch(self, root, fail_tag="", mode="antigen-length-ablation", fail_target="", execution_overlay=False):
         launcher = root / "run_gpu.sh"
         launcher.write_text((ROOT / "run_gpu.sh").read_text())
         bin_dir = root / "bin"
@@ -41,6 +41,11 @@ class AntigenLengthLauncherTests(unittest.TestCase):
             "sys.exit(1 if failure in sys.argv or os.environ['SWEEP_FAIL_TARGET'] in sys.argv else 0)\n"
         )
         snakemake.chmod(0o755)
+        if mode == 'smoke-all':
+            # Only the final summary invokes this interpreter in the stub run.
+            summary = driver / 'python'
+            summary.write_text('#!/bin/sh\nexit 0\n')
+            summary.chmod(0o755)
         source_eval = root / "artifacts/runs/esm2__c49369e9/eval.json"
         source_eval.parent.mkdir(parents=True)
         source_eval.write_text("{}")
@@ -58,6 +63,10 @@ class AntigenLengthLauncherTests(unittest.TestCase):
             "SWEEP_CALLS": str(calls), "SWEEP_FAIL_TAG": fail_tag,
             "SWEEP_FAIL_TARGET": fail_target,
         }
+        if execution_overlay:
+            overlay = root / 'local_12gb.yaml'
+            overlay.write_text('execution:\n  min_gpu_memory_gb: 10\n')
+            env['MANGO_EXECUTION_CONFIG'] = str(overlay)
         result = subprocess.run(["bash", str(launcher), mode],
                                 env=env, capture_output=True, text=True, timeout=30)
         return result, [json.loads(line) for line in calls.read_text().splitlines()]
@@ -99,6 +108,18 @@ class AntigenLengthLauncherTests(unittest.TestCase):
             result, calls = self.launch(Path(tmp), mode="iglm-baseline", fail_target="iglm_baseline")
         self.assertEqual(result.returncode, 1)
         self.assertEqual([args[-1] for args in calls], ["gpu_preflight", "iglm_baseline"])
+
+    def test_structural_esm3_failure_does_not_block_other_study_models(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result, calls = self.launch(root, mode='smoke-all', fail_tag='esm3_structure', execution_overlay=True)
+            self.assertEqual(result.returncode, 1)
+            tags = ['one_hot', 'biopython', 'pyrosetta_pre', 'esm2', 'esm3', 'esm3_structure', 'esmif', 'proteinmpnn']
+            inference = [args for args in calls if args[-1] == 'inference']
+            self.assertEqual([next(a for a in args if a.startswith('active_embedders=')) for args in inference],
+                             [f'active_embedders=[{tag}]' for tag in tags])
+            self.assertTrue(all(str(root / 'local_12gb.yaml') in args for args in calls))
+            self.assertFalse(any(args[-1] == 'gpu_results' for args in calls))
 
 
 if __name__ == "__main__":

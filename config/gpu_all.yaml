@@ -6,6 +6,7 @@ active_embedders:
   - pyrosetta_pre
   - esm2
   - esm3
+  - esm3_structure
   - esmif
   - proteinmpnn
 

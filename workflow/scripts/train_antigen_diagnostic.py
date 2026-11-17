@@ -28,12 +28,24 @@ def parameter_list(model, kind):
         list(model.lm.parameters()) + (list(model.antigen_projection.parameters()) if kind == 'iglm_cross' else []))
 
 
-def build_model(spec, source=None):
+def build_model(spec, source=None, restore=False):
     """Zero-output cross attention preserves the exact IgLM function initially."""
     from transformers import GPT2Config, GPT2LMHeadModel
     if spec['kind'] == 'mango':
         architecture = (MangoModel.CROSS_ATTENTION_ARCHITECTURE if spec['architecture'] == 'cross_attention'
                         else MangoModel.ARCHITECTURE)
+        if source is not None:
+            if source.get('format') == FORMAT:
+                # Historical diagnostic checkpoints predate architecture metadata.
+                source_architecture = source['metadata'].get('architecture',
+                    MangoModel.CROSS_ATTENTION_ARCHITECTURE if spec['architecture'] == 'cross_attention'
+                    else MangoModel.LEGACY_PREFIX_ARCHITECTURE)
+            else:
+                source_architecture = source.get('architecture')
+            if restore:
+                architecture = source_architecture
+            elif source_architecture != architecture:
+                raise ValueError('Diagnostic MANGO source architecture differs; train a matching fixed-position source')
         model = MangoModel(1280, architecture=architecture)
     else:
         native = dict(initialization='random_from_scratch', objective='full_chain_autoregressive_v1', species_token='[HUMAN]')
@@ -149,6 +161,9 @@ def stage(study, arm, phase, source_path=None):
         optimizer_loaded=False, trainable_parameters=sum(p.numel() for p in parameters),
         decoder_config=model.lm.config.to_dict(), training_examples=len(training), validation_examples=len(validation),
         order_epoch=1 if spec['source'] != 'prototype_asd' else 0)
+    if spec['kind'] == 'mango':
+        metadata.update(architecture=model.architecture,
+                        fixed_antibody_positions=model.fixed_antibody_positions or spec['mode'] == 'rebased')
     atomic_json(directory / 'metadata.json', metadata)
     if spec.get('shuffle_training_antigens'):
         atomic_json(directory / 'training_antigen_donors.json', {r.id: donors[r.id]['id'] for r in training})
@@ -249,7 +264,7 @@ def evaluate_stage(study, arm):
     metadata = checkpoint['metadata']
     if metadata['cohort_sha256'] != cohort or metadata['spec'] != spec:
         raise ValueError('Experimental evaluation cohort or architecture differs')
-    model = build_model(spec, checkpoint)
+    model = build_model(spec, checkpoint, restore=True)
     to_device(model, spec['kind'], device)
     rows = read_csv(records_path)
     by_id = {r['id']: r for r in rows}

@@ -6,7 +6,7 @@ original_sabdab_records: artifacts/data/sabdab2_v0.1.0/processed/records.csv
 original_esm2_dir: artifacts/data/sabdab2_v0.1.0/embeddings/antigen/esm2
 esm2_size: t33_650M
 model:
-  architecture: antigen_chain_gpt2_v3
+  architecture: antigen_chain_fixed_position_gpt2_v1
   target_chains: [heavy, light]
   epochs: 10
   lr: 1.0e-4

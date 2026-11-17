@@ -1,0 +1,11 @@
+experiment_root: artifacts/experiments/epitope_diagnostics_v1
+reference_root: artifacts/experiments/affinity_ranking_pilot_v1
+seeds: [200, 201, 202, 203, 204]
+arms: [IgLM_CE, MANGO_CE, IgLM_rank, MANGO_rank]
+memory_tokens: 32
+batch_size: 32
+contact_cutoffs: [4.0, 5.0, 8.0]
+primary_contact_cutoff: 5.0
+parity_tolerance: 0.000003
+token_parity_tolerance: 0.00001
+smoke: false

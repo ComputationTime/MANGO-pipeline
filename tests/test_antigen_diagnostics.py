@@ -11,12 +11,29 @@ from antigen_diagnostics import balanced_records, mango_token_nll, wrong_antigen
 from model_common import MangoModel
 from iglm_baseline import IgLMScratch, MODEL_CONFIG
 from train_antigen_diagnostic import build_model, parameter_list
+from train_antigen_diagnostic import FORMAT
 from antigen_diagnostics import iglm_token_nll
 from summarize_antigen_diagnostics import paired_difference
 from number_diagnostic_regions import region
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_diagnostic_restoration_preserves_legacy_positions_and_new_training_requires_matching_source(self):
+        torch.set_num_threads(2)
+        legacy = MangoModel(1280, architecture=MangoModel.LEGACY_PREFIX_ARCHITECTURE).eval()
+        spec = dict(kind='mango', architecture='mango', mode='pooled')
+        source = dict(format=FORMAT, metadata=dict(spec=spec), weights={
+            name: getattr(legacy, name).state_dict() for name in ('lm', 'chain_embedding', 'antigen_projection')})
+        restored = build_model(spec, source, restore=True).eval()
+        self.assertEqual(restored.architecture, MangoModel.LEGACY_PREFIX_ARCHITECTURE)
+        antigen = torch.randn(1, 7, 1280)
+        with torch.no_grad():
+            torch.testing.assert_close(mango_token_nll(restored, antigen, 'heavy', 'ACD'),
+                                       mango_token_nll(legacy, antigen, 'heavy', 'ACD'), rtol=0, atol=0)
+        with self.assertRaisesRegex(ValueError, 'source architecture differs'):
+            build_model(spec, source)
+        self.assertEqual(build_model(spec).architecture, MangoModel.FIXED_POSITION_ARCHITECTURE)
+
     def test_donors_stay_within_split_and_change_antigen_family(self):
         rows = [dict(id=f'{split}_{i}', split=split, resolved_ag_seq='A' * (i + 2),
                      ab_ag_cluster=f'{split}_{i}')

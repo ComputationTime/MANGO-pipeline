@@ -125,6 +125,7 @@ rule prefetch_esm3_weights:
     params:
         method="esm3",
         model_name=lambda w: embedder_spec(w.embedder)["model_name"],
+        representation=lambda w: embedder_spec(w.embedder).get('representation', 'sequence'),
     wildcard_constraints:
         embedder=method_constraint("esm3"),
     resources:

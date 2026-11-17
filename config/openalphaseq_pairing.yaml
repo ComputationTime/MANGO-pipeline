@@ -1,0 +1,16 @@
+experiment_root: artifacts/experiments/openalphaseq_pairing_16k_v1
+dataset_dir: artifacts/data/openalphaseq
+training_records: artifacts/experiments/asd_scaling_16k_v1/n16000/cohort/asd_records.csv
+training_audit: artifacts/experiments/asd_scaling_16k_v1/n16000/cohort/split_audit.json
+esm2_cache_dir: artifacts/experiments/asd_focal_comparison_v1/cache/esm2
+esm2_size: t33_650M
+panel: optimisation_experiments_all_targets
+numbering_batch_size: 5000
+batch_size: 128
+seed: 0
+models:
+  iglm: {directory: artifacts/experiments/asd_scaling_16k_v1/runs/n16000_iglm, family: iglm}
+  regular: {directory: artifacts/experiments/asd_scaling_16k_v1/runs/n16000_mango, family: mango}
+  fixed: {directory: artifacts/experiments/asd_scaling_fixed_positions_v1/runs/n16000_fixed, family: mango_fixed}
+  cross: {directory: artifacts/experiments/asd_scaling_16k_v1/runs/n16000_cross, family: cross_attention}
+  shuffled: {directory: artifacts/experiments/asd_scaling_16k_v1/runs/n16000_shuffled, family: cross_attention}

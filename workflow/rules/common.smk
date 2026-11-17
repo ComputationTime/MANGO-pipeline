@@ -94,6 +94,11 @@ def model_config_for_tag(tag: str) -> dict:
     return {**config["model"], **EMBEDDERS[tag].get("model_overrides", {})}
 
 
+def model_global_state_for_tag(tag: str) -> dict:
+    """Record one run consistently in singleton and aggregate invocations."""
+    return {**config, 'active_embedders': [tag]}
+
+
 def tags_for_method(method: str) -> list:
     """Active tags built by a given method -- used for wildcard constraints.
 
