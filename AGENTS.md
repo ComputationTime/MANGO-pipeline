@@ -35,7 +35,7 @@ Only after both smoke outcomes have been understood and fixed run:
 ```
 
 Read `docs/cloud_gpu_setup.md` before changing installation or execution logic.
-The launcher is the supported cloud interface; `mango/MANGORunner.py` is legacy.
+The launcher is the supported cloud interface; the old `MANGORunner` API was retired (see `_to_review/legacy/`).
 
 ## Current supported scope
 

@@ -53,7 +53,7 @@ On the instance:
 
 ```bash
 cd /PATH/MANGO
-chmod +x run_gpu.sh install_mango.sh
+chmod +x run_gpu.sh
 ```
 
 The `MANGO` Git repository can remain nested inside the larger pipeline

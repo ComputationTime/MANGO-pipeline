@@ -11,7 +11,7 @@ the same antigen-only biological input plus a learned heavy/light output
 selector. Heavy-chain generation remains the downstream-analysis default.
 
 The Snakemake workflow is the canonical interface. The older
-`mango/MANGORunner.py` API is legacy code and is not the supported execution
+retired `MANGORunner` API (now in `_to_review/legacy/`) is legacy code and is not the supported execution
 path for the current model.
 
 ## Current milestone
@@ -50,9 +50,6 @@ AF-M is a stub. Therapeutic targets, AF3, and TAP remain deferred.
 Boltz-2/Chai-1 structure confidence has passed a two-sequence GPU plumbing
 check and now runs by default in smoke/small/study with mode-specific bounds.
 
-For a beginner-oriented, linked explanation of the hypothesis, architecture,
-terminology, and every Snakemake module, open
-[`docs/site/index.html`](docs/site/index.html) in a web browser.
 
 ## Repository layout
 
@@ -64,7 +61,6 @@ workflow/scripts/              executable stage implementations
 workflow/envs/                 isolated rule environments
 mango/utils/                   model components used by the workflow
 tests/                         fast contract tests
-docs/site/index.html           linked beginner-oriented project guide
 artifacts/                     generated data and models; ignored by Git
 ```
 

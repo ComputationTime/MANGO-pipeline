@@ -363,22 +363,6 @@ rule embed_antigen_proteinmpnn:
         "../scripts/embed_antigen_proteinmpnn.py"
 
 
-rule embed_antigen_afm:
-    input:
-        records=_records,
-    output:
-        f"{EMB_DIR}/antigen/{{embedder}}/{{split}}/{{instance}}.pt",
-    params:
-        spec=_spec,
-        seq_source=SEQ_SOURCE,
-    wildcard_constraints:
-        embedder=method_constraint("afm"),
-    conda:
-        "../envs/embed_afm.yaml"
-    script:
-        "../scripts/embed_antigen_afm.py"
-
-
 # --- persistent-model batches for the single-GPU profile --------------------
 # The normal fine-grained rules above remain useful for incremental workstation
 # work. On a full study, however, one process per record would reload large

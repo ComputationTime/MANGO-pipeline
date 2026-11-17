@@ -139,14 +139,6 @@ embedders:
     model: "vanilla_models"         # vanilla_models | ca_models | soluble_models
     noise: 2                        # 2 | 10 | 20 | 30
 
-  afm:
-    method: afm
-    class: learned
-    label: "AF-M"
-    representation: "single"        # single | pair | structure
-    # Deferred AF-M must follow the same antigen-only input contract.
-    conditioning_scope: antigen_only_v1
-
 # First milestone: prove the complete train/inference path with the simplest
 # antigen representation. Additional embedders remain registered above but are
 # deliberately outside the active DAG until this baseline is reliable.
