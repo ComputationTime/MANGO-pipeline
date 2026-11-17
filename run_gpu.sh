@@ -2,31 +2,63 @@
 set -euo pipefail
 
 # One-command local NVIDIA GPU runner.
-#   ./run_gpu.sh smoke        five-record plumbing run (default)
-#   ./run_gpu.sh small        bounded multi-record validation run
-#   ./run_gpu.sh study        full eight-embedder SAbDab2 study
-#   ./run_gpu.sh train-all    train/evaluate all eight models and matched scratch IgLM
-#   ./run_gpu.sh smoke-esm3   smoke + gated ESM3
-#   ./run_gpu.sh study-esm3   full study + gated ESM3
-#   ./run_gpu.sh smoke-pyrosetta / study-pyrosetta
-#   ./run_gpu.sh smoke-all / study-all (ESM3 + PyRosetta)
-#   ./run_gpu.sh weights[-esm3|-pyrosetta|-all] (downloads only)
-#   ./run_gpu.sh esm2-ablation (8M/35M/150M plus the cached 650M evaluation)
-#   ./run_gpu.sh antigen-controls (constant, random, pooled, shuffled, cross-attention)
-#   ./run_gpu.sh antigen-length-ablation (constant/random/token-merged ESM2 length sweep)
-#   ./run_gpu.sh iglm-baseline (IgLM from scratch, then the context-length figure)
+#
+#   ./run_gpu.sh <mode> [--esm3] [--pyrosetta] [--all]
+#
+# Modes
+#   smoke      five-record plumbing run (default)
+#   small      bounded multi-record validation run
+#   study      full eight-embedder SAbDab2 study
+#   train-all  train/evaluate all eight models and matched scratch IgLM
+#   weights    download model weights only
+#   doctor     check this machine (GPU, disk, RAM, Conda, network, HF_TOKEN) and exit
+# Flags (smoke, small, study, weights)
+#   --esm3       add gated ESM3 (needs accepted terms and HF_TOKEN)
+#   --pyrosetta  add PyRosetta PRE (needs an eligible licence)
+#   --all        both of the above
+#   e.g. ./run_gpu.sh smoke --all   (legacy spellings smoke-all, study-esm3, ... still work)
+# Ablations and controls
+#   esm2-ablation            8M/35M/150M plus the cached 650M evaluation
+#   antigen-controls         constant, random, pooled, shuffled, cross-attention
+#   antigen-length-ablation  constant/random/token-merged ESM2 length sweep
+#   iglm-baseline            IgLM from scratch, then the context-length figure
 #   Side studies (ASD, AbRank, OpenAlphaSeq, affinity, ...): ./experiments/run_experiment.sh
 
-MODE="${1:-smoke}"
-if [[ "$MODE" == "-h" || "$MODE" == "--help" || "$MODE" == "help" ]]; then
-  sed -n '4,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-  exit 0
+# --- argument handling: "<mode> [--esm3] [--pyrosetta] [--all]" -> internal mode ---
+BASE_MODE=""; WANT_ESM3=0; WANT_PYRO=0
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help|help)
+      sed -n '4,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --esm3) WANT_ESM3=1 ;;
+    --pyrosetta) WANT_PYRO=1 ;;
+    --all) WANT_ESM3=1; WANT_PYRO=1 ;;
+    -*) echo "Unknown option: $arg (see $0 --help)" >&2; exit 2 ;;
+    *) if [[ -n "$BASE_MODE" ]]; then echo "Only one mode may be given (got '$BASE_MODE' and '$arg')." >&2; exit 2; fi
+       BASE_MODE="$arg" ;;
+  esac
+done
+MODE="${BASE_MODE:-smoke}"
+if (( WANT_ESM3 || WANT_PYRO )); then
+  case "$MODE" in
+    smoke|small|study|weights) ;;
+    *) echo "--esm3/--pyrosetta/--all apply only to smoke, small, study and weights (got '$MODE')." >&2; exit 2 ;;
+  esac
+  if (( WANT_ESM3 && WANT_PYRO )); then MODE="$MODE-all"
+  elif (( WANT_ESM3 )); then MODE="$MODE-esm3"
+  else MODE="$MODE-pyrosetta"; fi
+fi
+if [[ "$MODE" == "doctor" ]]; then
+  exec bash "$(dirname "${BASH_SOURCE[0]}")/scripts/doctor.sh"
 fi
 case "$MODE" in
   smoke|small|study|train-all|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls|antigen-length-ablation|iglm-baseline) ;;
-  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | train-all | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline" >&2
+  *) echo "usage: $0 {smoke|small|study|weights|train-all|doctor} [--esm3] [--pyrosetta] [--all] | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline" >&2
      echo "Side-study modes now live in experiments/run_experiment.sh (unsupported)." >&2; exit 2 ;;
 esac
+
+
+if [[ "${MANGO_PRINT_MODE:-0}" == "1" ]]; then echo "$MODE"; exit 0; fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"

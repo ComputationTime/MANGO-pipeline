@@ -7,7 +7,7 @@ go to `artifacts/` (figures in `artifacts/analysis/figures/`, each with a
 ## Order of operations
 
 1. `./run_gpu.sh smoke`: plumbing check. Fix anything it reports.
-2. `./run_gpu.sh smoke-all`: also validates gated ESM3 and PyRosetta PRE
+2. `./run_gpu.sh smoke --all`: also validates gated ESM3 and PyRosetta PRE
    (needs `HF_TOKEN`). PyRosetta PRE mmCIF chain mapping still needs validating
    here before its scientific results are used.
 3. `./run_gpu.sh study`: full eight-embedder study, then figures 1-6.
@@ -33,9 +33,10 @@ finished.
 | 9. Antigen context-length ablation + IgLM | `fig9_antigen_context_length_ablation` | `./run_gpu.sh antigen-length-ablation`, `iglm-baseline` |
 
 `train-all` trains and evaluates all eight models plus a matched from-scratch
-IgLM. `study-esm3`, `study-pyrosetta`, `study-all` (and the `smoke-`/`small-`
-forms) select which gated embedders join; `weights[-esm3|-pyrosetta|-all]`
-only downloads weights.
+IgLM. The flags `--esm3`, `--pyrosetta` and `--all` select which gated
+embedders join `smoke`, `small`, `study` or `weights` (`weights` only downloads
+weights). The older spellings (`smoke-all`, `study-esm3`, `weights-all`, ...)
+still work. Run `./run_gpu.sh doctor` first on a new machine.
 
 FLAb / AlphaSeq benchmark plots are standalone scripts in
 `workflow/scripts/analysis/` (`prepare_alphaseq.py`, `score_flab.py`,

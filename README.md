@@ -27,14 +27,15 @@ CUDA toolkit is needed; the per-rule Conda environments carry it. On a 12 GB
 card add `MANGO_EXECUTION_CONFIG=config/local_12gb.yaml`.
 
 ```bash
+./run_gpu.sh doctor       # check GPU, disk, RAM, Conda, network, HF_TOKEN; changes nothing
 ./run_gpu.sh smoke        # 5-record plumbing check, five non-gated embedders
-./run_gpu.sh smoke-all    # adds gated ESM3 and PyRosetta PRE
+./run_gpu.sh smoke --all  # adds gated ESM3 and PyRosetta PRE (--esm3 / --pyrosetta for one)
 ./run_gpu.sh study        # full eight-embedder study
-./run_gpu.sh --help       # every mode
+./run_gpu.sh --help       # every mode and flag
 ```
 
 Smoke metrics only prove the plumbing; they are not scientifically meaningful.
-Run `smoke` and `smoke-all` and look at their report before launching `study`.
+Run `smoke` and `smoke --all` and look at their report before launching `study`.
 
 Gated/licensed pieces: ESM3 needs accepted Hugging Face terms and `HF_TOKEN`
 (export it; never write it into the repo). PyRosetta needs an eligible academic
