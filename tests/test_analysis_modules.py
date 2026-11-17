@@ -46,6 +46,18 @@ class AnalysisModuleTests(unittest.TestCase):
         pd.DataFrame(rows).to_csv(path, index=False)
         return path
 
+    def test_gene_plot_reports_unassigned_sequences_without_inventing_families(self):
+        path = self._csv('unassigned.csv', [dict(embedder='one_hot', v_gene='', j_gene='',
+                         germline_species='', germline_status='error: no heavy-chain domain') for _ in range(2)])
+        figure, table = self.root / 'empty_genes.png', self.root / 'empty_genes.csv'
+        plot_genes.plot_all_embedder_genes([path], ['one_hot'], {}, figure, table, 80)
+        self.assertTrue(figure.is_file())
+        summary = pd.read_csv(table, keep_default_na=False)
+        self.assertEqual(set(summary['plot']), {'V', 'J'})
+        self.assertEqual(summary['count'].tolist(), [2, 2])
+        self.assertEqual(set(summary['status']), {'unassigned'})
+        self.assertTrue((summary['category'] == '').all())
+
     def test_cohort_selection_is_order_independent_and_shared_by_embedder(self):
         records = self._csv("records.csv", [
             {"id": "target-a", "resolved_L_seq": "DIQMTQ"},

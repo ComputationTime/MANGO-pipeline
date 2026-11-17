@@ -1,7 +1,14 @@
 """Position resets must retain antigen attention and agree with cached generation."""
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parents[1]
+for _d in (_ROOT / "workflow" / "scripts", _ROOT / "experiments" / "scripts", _ROOT / "experiments" / "scripts" / "analysis"):
+    if str(_d) not in _sys.path:
+        _sys.path.append(str(_d))
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 import torch
 from transformers import GPT2Config
@@ -13,10 +20,47 @@ from antigen_diagnostics import mango_token_nll
 
 
 class FixedPositionTests(unittest.TestCase):
+    def test_all_new_models_keep_target_positions_independent_of_antigen_length(self):
+        torch.set_num_threads(2)
+        for architecture in (MangoModel.ARCHITECTURE, MangoModel.CROSS_ATTENTION_ARCHITECTURE):
+            model = MangoModel(8, architecture=architecture).eval()
+            self.assertTrue(model.fixed_antibody_positions)
+            for chain in ('heavy', 'light'):
+                observed = []
+                for length in (3, 11):
+                    antigen = torch.randn(1, length, 8)
+                    with patch.object(model.lm.transformer.wpe, 'forward',
+                                      wraps=model.lm.transformer.wpe.forward) as positions:
+                        model.loss(antigen, chain, model.target_token_ids('ACD'))
+                    prefix_length = 0 if model.uses_cross_attention else length
+                    observed.append(positions.call_args.args[0][:, prefix_length:])
+                torch.testing.assert_close(observed[0], observed[1], rtol=0, atol=0)
+                self.assertEqual(observed[0].tolist(), [[0, 1, 2, 3, 4, 5]])
+
+    def test_legacy_checkpoint_preserves_its_trained_position_policy(self):
+        torch.set_num_threads(2)
+        legacy = MangoModel(8, architecture=MangoModel.LEGACY_PREFIX_ARCHITECTURE).eval()
+        checkpoint = dict(architecture=legacy.architecture, d_ag=8,
+            target_chains=['heavy', 'light'], lm=legacy.lm.state_dict(),
+            chain_embedding=legacy.chain_embedding.state_dict(), antigen_projection=legacy.antigen_projection.state_dict())
+        restored = MangoModel.from_checkpoint(checkpoint).eval()
+        self.assertFalse(restored.fixed_antibody_positions)
+        antigen = torch.randn(1, 7, 8)
+        for chain in ('heavy', 'light'):
+            with torch.no_grad():
+                torch.testing.assert_close(mango_token_nll(restored, antigen, chain, 'ACD'),
+                                           mango_token_nll(legacy, antigen, chain, 'ACD'), rtol=0, atol=0)
+        default = MangoModel(8).eval()
+        self.assertEqual(default.architecture, MangoModel.FIXED_POSITION_ARCHITECTURE)
+        default.load_state_dict(legacy.state_dict())
+        with torch.no_grad():
+            self.assertFalse(torch.allclose(mango_token_nll(default, antigen, 'heavy', 'ACD'),
+                                            mango_token_nll(legacy, antigen, 'heavy', 'ACD')))
+
     def test_production_loss_matches_the_corrected_earlier_variant_and_remains_causal(self):
         torch.set_num_threads(2)
         torch.manual_seed(0)
-        regular = MangoModel(8).eval()
+        regular = MangoModel(8, architecture=MangoModel.LEGACY_PREFIX_ARCHITECTURE).eval()
         fixed = MangoModel(8, architecture=MangoModel.FIXED_POSITION_ARCHITECTURE).eval()
         fixed.load_state_dict(regular.state_dict())
         antigen = torch.randn(1, 7, 8, requires_grad=True)

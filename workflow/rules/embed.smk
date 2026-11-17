@@ -125,6 +125,7 @@ rule prefetch_esm3_weights:
     params:
         method="esm3",
         model_name=lambda w: embedder_spec(w.embedder)["model_name"],
+        representation=lambda w: embedder_spec(w.embedder).get('representation', 'sequence'),
     wildcard_constraints:
         embedder=method_constraint("esm3"),
     resources:
@@ -360,22 +361,6 @@ rule embed_antigen_proteinmpnn:
         "../envs/embed_proteinmpnn.yaml"
     script:
         "../scripts/embed_antigen_proteinmpnn.py"
-
-
-rule embed_antigen_afm:
-    input:
-        records=_records,
-    output:
-        f"{EMB_DIR}/antigen/{{embedder}}/{{split}}/{{instance}}.pt",
-    params:
-        spec=_spec,
-        seq_source=SEQ_SOURCE,
-    wildcard_constraints:
-        embedder=method_constraint("afm"),
-    conda:
-        "../envs/embed_afm.yaml"
-    script:
-        "../scripts/embed_antigen_afm.py"
 
 
 # --- persistent-model batches for the single-GPU profile --------------------

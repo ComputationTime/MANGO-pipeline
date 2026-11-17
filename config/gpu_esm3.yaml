@@ -5,6 +5,7 @@ active_embedders:
   - biopython
   - esm2
   - esm3
+  - esm3_structure
   - esmif
   - proteinmpnn
 

@@ -2,6 +2,7 @@
 
 Default prefix: projected antigen, learned H/L selector, BOS. The cross-attention
 control keeps antigen memory separate and prefixes only the selector and BOS.
+Selector/BOS/antibody positions start at zero/one/two for every antigen length.
 Only target residues and EOS receive labels. No antibody enters conditioning.
 """
 
@@ -36,8 +37,9 @@ def import_mango(dotted: str, mango_dir=None):
 class MangoModel(nn.Module):
     """Antigen-only conditioning with an explicit heavy/light selector."""
 
-    ARCHITECTURE = "antigen_chain_gpt2_v3"
+    LEGACY_PREFIX_ARCHITECTURE = "antigen_chain_gpt2_v3"
     FIXED_POSITION_ARCHITECTURE = "antigen_chain_fixed_position_gpt2_v1"
+    ARCHITECTURE = FIXED_POSITION_ARCHITECTURE
     CROSS_ATTENTION_ARCHITECTURE = "antigen_chain_cross_attention_gpt2_v1"
     TASK = "antigen+chain_type->chain"
     CHAIN_IDS = {"heavy": 0, "light": 1}
@@ -53,11 +55,14 @@ class MangoModel(nn.Module):
     def __init__(self, d_ag: int, mango_dir=None, target_chains=("heavy", "light"),
                  architecture=ARCHITECTURE):
         super().__init__()
-        if architecture not in {self.ARCHITECTURE, self.FIXED_POSITION_ARCHITECTURE, self.CROSS_ATTENTION_ARCHITECTURE}:
+        if architecture not in {self.LEGACY_PREFIX_ARCHITECTURE, self.ARCHITECTURE, self.CROSS_ATTENTION_ARCHITECTURE}:
             raise ValueError(f"Unsupported model architecture: {architecture}")
         self.architecture = architecture
         self.uses_cross_attention = architecture == self.CROSS_ATTENTION_ARCHITECTURE
+        # Prefix decoders reset positions after antigen tokens. Cross-attention
+        # already starts its selector/BOS at 0/1 because antigen is separate.
         self.uses_fixed_positions = architecture == self.FIXED_POSITION_ARCHITECTURE
+        self.fixed_antibody_positions = self.uses_fixed_positions or self.uses_cross_attention
         mu = import_mango("mango.utils.mango_utils", mango_dir)
         self.vocab = dict(mu.ablang_vocab)
         self.decode = {i: c for c, i in self.vocab.items()}
@@ -124,7 +129,7 @@ class MangoModel(nn.Module):
     @classmethod
     def from_checkpoint(cls, checkpoint):
         if checkpoint.get("architecture") not in {
-            cls.ARCHITECTURE, cls.FIXED_POSITION_ARCHITECTURE, cls.CROSS_ATTENTION_ARCHITECTURE
+            cls.LEGACY_PREFIX_ARCHITECTURE, cls.ARCHITECTURE, cls.CROSS_ATTENTION_ARCHITECTURE
         }:
             raise ValueError(
                 "Incompatible MANGO checkpoint: antigen + chain conditioning requires "

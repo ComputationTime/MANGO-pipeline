@@ -30,10 +30,16 @@ def _fair_esm(method, model_name):
     return parameters, files, str(checkpoint_dir)
 
 
-def _esm3(model_name):
+def _esm3(model_name, representation='sequence'):
     from esm.models.esm3 import ESM3
 
-    model = ESM3.from_pretrained(model_name)
+    # Asset prefetch can overlap another embedder's GPU work. Keep model
+    # construction and the lazy structure encoder on CPU in this stage.
+    model = ESM3.from_pretrained(model_name, device=torch.device('cpu'))
+    if representation == 'sequence_structure':
+        # Structure tokenization loads a separate pretrained encoder lazily.
+        # Verify its weights before the embedding stage starts.
+        model.get_structure_encoder()
     parameters = sum(parameter.numel() for parameter in model.parameters())
     del model
     cache_root = Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface"))
@@ -61,12 +67,12 @@ def _pyrosetta():
     return 0, [str(package), str(database)], str(package.parent)
 
 
-def prefetch(method, model_name, tag, output):
+def prefetch(method, model_name, tag, output, representation='sequence'):
     print(f"prefetching {tag}: {model_name}", flush=True)
     if method in {"esm2", "esmif"}:
         parameters, files, cache_root = _fair_esm(method, model_name)
     elif method == "esm3":
-        parameters, files, cache_root = _esm3(model_name)
+        parameters, files, cache_root = _esm3(model_name, representation)
     elif method == "pyrosetta_pre":
         parameters, files, cache_root = _pyrosetta()
     else:
@@ -84,6 +90,7 @@ def prefetch(method, model_name, tag, output):
         "cached_file_count": len(files),
         "cached_files": files,
         "hf_token_present": bool(os.environ.get("HF_TOKEN")) if method == "esm3" else None,
+        "structure_encoder_verified": method == 'esm3' and representation == 'sequence_structure',
     }
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -104,6 +111,7 @@ def main():
         model_name=smk.params.model_name,
         tag=smk.wildcards.embedder,
         output=smk.output.marker,
+        representation=getattr(smk.params, 'representation', 'sequence'),
     )
 
 

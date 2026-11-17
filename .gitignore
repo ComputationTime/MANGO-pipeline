@@ -31,3 +31,10 @@ review/full_v2_artifacts/figure_data/
 review/full_v2_artifacts/figures/
 review/full_v2_artifacts/manifest.json
 review/full_v2_artifacts/summary/
+
+# Generated outputs and OS junk
+review/
+.DS_Store
+__pycache__/
+*.pyc
+_to_review/MANGO_BINDING_DATA/

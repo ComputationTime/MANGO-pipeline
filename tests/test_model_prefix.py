@@ -28,12 +28,13 @@ class AntigenPrefixTests(unittest.TestCase):
         self.assertTrue((labels[:, :prefix_len] == -100).all())
         torch.testing.assert_close(labels[:, prefix_len:], self.ids[:, 1:])
         inputs = kwargs['inputs_embeds']
+        context = {key: kwargs[key] for key in ('position_ids', 'attention_mask')}
         with torch.no_grad():
-            logits = self.model.lm(inputs_embeds=inputs).logits
+            logits = self.model.lm(inputs_embeds=inputs, **context).logits
             expected = F.cross_entropy(logits[:, prefix_len-1:-1].reshape(-1, 26), self.ids[:, 1:].reshape(-1))
             changed = inputs.clone()
             changed[:, prefix_len:] = torch.randn_like(changed[:, prefix_len:])
-            altered = self.model.lm(inputs_embeds=changed).logits
+            altered = self.model.lm(inputs_embeds=changed, **context).logits
         torch.testing.assert_close(loss, expected)
         torch.testing.assert_close(logits[:, :prefix_len], altered[:, :prefix_len])
 

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A scientific workflow for diagnosing MANGO's bottlenecks in antigen conditioning, interface learning, and binding-affinity ranking.">
+  <title>MANGO: questions and experiments for diagnosing the bottleneck</title>
+  <style>
+    :root { color-scheme: light; --ink: #182c37; --muted: #526570; --line: #d7e1e5; --accent: #17645e; --wash: #edf5f3; --paper: #fff; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: #f4f6f7; color: var(--ink); font: 17px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1020px; margin: 42px auto; padding: 48px 64px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -.035em; margin: 12px 0 20px; }
+    h2 { font-size: 1.5rem; margin: 0 0 18px; }
+    h3 { font-size: 1rem; margin: 24px 0 8px; color: var(--accent); }
+    p { margin: 0 0 16px; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:focus-visible { outline: 3px solid #ca8700; outline-offset: 4px; }
+    .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .lead { font-size: 1.16rem; }
+    .meta, .small { color: var(--muted); font-size: .9rem; }
+    .note { background: var(--wash); padding: 20px 24px; border-left: 4px solid var(--accent); margin: 24px 0; }
+    .note p:last-child, section p:last-child { margin-bottom: 0; }
+    nav { margin: 32px 0; padding: 22px 26px; border: 1px solid var(--line); border-radius: 8px; }
+    nav ol { margin-bottom: 0; padding-left: 24px; }
+    nav li { padding: 3px 0; }
+    section { border-top: 1px solid var(--line); padding-top: 34px; margin-top: 36px; scroll-margin-top: 24px; }
+    .question-label { display: block; color: var(--accent); font-size: .78rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+    dl { margin: 18px 0; }
+    dt { font-weight: 700; margin-top: 14px; }
+    dd { margin: 3px 0 0; }
+    ul, ol { padding-left: 24px; }
+    li { margin-bottom: 7px; }
+    .equation { overflow-x: auto; background: #f5f7f8; border: 1px solid var(--line); border-radius: 6px; padding: 16px 20px; font: 1rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; margin: 20px 0; }
+    .decision { border-left: 3px solid #d8a334; padding: 2px 0 2px 18px; margin-top: 22px; }
+    code { font: .9em ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .94rem; }
+    th, td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { background: #f3f6f7; }
+    footer { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 20px; }
+    @media (max-width: 700px) { body { font-size: 16px; } main { margin: 0; padding: 30px 22px; border: 0; border-radius: 0; } nav, .note { padding: 18px; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print { body { background: white; font-size: 10.5pt; } main { max-width: none; margin: 0; padding: 0; border: 0; } nav { display: none; } section { margin-top: 22px; padding-top: 22px; } h2, h3, dt { break-after: avoid; } .note, .decision, tr { break-inside: avoid; } a { color: inherit; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">MANGO research plan</div>
+    <h1>Find the bottleneck.<br>Test one explanation at a time.</h1>
+    <p class="lead">A sequence of scientific questions and controlled experiments to determine why antigen and structural information are not yet producing a reliable advantage in binding-affinity ranking.</p>
+    <p class="meta">Written 12 November 2026 · Proposed experiments; this document does not launch or implement them.</p>
+  </header>
+
+  <div class="note">
+    <p><strong>Fixed model task:</strong> given the antigen and a requested heavy/light chain selector, generate that antibody chain. Native antibody sequences, embeddings, coordinates, epitope masks and paratope masks must never become external conditioning inputs. Teacher-forced training and candidate scoring use the antibody only as the autoregressive target/prefix. Native contact maps may provide training supervision and held-out evaluation labels.</p>
+  </div>
+
+  <p><strong>Starting evidence.</strong> In the completed geometry/contact-supervision pilot, contact prediction improved and became sensitive to antigen geometry. Affinity ranking did not improve consistently. This establishes that learning contacts and ranking binding strength are different outcomes; it does not establish a single cause of failure. See the <a href="../artifacts/experiments/interface_supervision_v1/interpretation.md">completed experiment interpretation</a> and <a href="../artifacts/experiments/epitope_diagnostics_v1/interpretation.md">earlier antigen/interface diagnostics</a>.</p>
+
+  <nav aria-label="Scientific questions">
+    <strong>Questions, in diagnostic order</strong>
+    <ol>
+      <li><a href="#benchmark">Does the benchmark measure the affinity discrimination we want?</a></li>
+      <li><a href="#trainability">Can the implementation learn a dependency that requires antigen information?</a></li>
+      <li><a href="#conditioning">Does antigen information actually influence the model's affinity ranking?</a></li>
+      <li><a href="#readout">Is useful affinity information present but missed by the likelihood score?</a></li>
+      <li><a href="#routing">Does routing predicted contact information into attention improve its use?</a></li>
+      <li><a href="#transfer">Does an improvement transfer, and does it grow with independent training data?</a></li>
+    </ol>
+  </nav>
+
+  <section id="benchmark" aria-labelledby="q1">
+    <span class="question-label">Scientific question 1 · Data and evaluation</span>
+    <h2 id="q1">Does the benchmark measure the affinity discrimination we want?</h2>
+    <p><strong>Experiment.</strong> Re-evaluate frozen model scores on explicitly defined cohorts: the existing broad panels, variants sharing an antibody parent, and variants matched for light chain and assay. Compare MANGO with the scratch IgLM and simple sequence baselines. Ask whether its advantage survives comparisons among closely related antibodies, where generic sequence preferences have less opportunity to dominate.</p>
+    <dl>
+      <dt>Data checks and controls</dt>
+      <dd>Check affinity direction, units, detection limits, duplicate measurements, assay type and parent identity. For genuine K<sub>D</sub> measurements, express pK<sub>D</sub> as −log<sub>10</sub>(K<sub>D</sub> in molar units), so larger values mean stronger binding. Keep enrichment or other assay proxies separately labeled. Record light-chain and framework variation. Preserve <code>ab_ag_cluster</code> and existing protection-group boundaries; add parent-level protection where needed.</dd>
+      <dt>Measurements</dt>
+      <dd>Report per-target and within-parent Spearman correlation, paired ranking accuracy, and the paired improvement over IgLM. Where measurement errors are available, distinguish uncertain orders from clearly separated affinities. Do not silently discard censored observations or convert them into exact values.</dd>
+    </dl>
+    <p class="decision"><strong>Interpretation and next decision.</strong> A broad-panel gain that disappears within families is compatible with a sequence-prior or cohort-composition effect. A reproducible within-family gain is stronger evidence of useful affinity discrimination. If too few independent parents have trustworthy measurements, the next action is data acquisition; a larger architecture cannot resolve that uncertainty.</p>
+    <p class="small">Antigen-free language-model priors have themselves supported experimental affinity improvement, so affinity correlation alone does not demonstrate antigen-specific reasoning. <a href="https://www.nature.com/articles/s41587-023-01763-2">Hie et al., 2023</a>.</p>
+  </section>
+
+  <section id="trainability" aria-labelledby="q2">
+    <span class="question-label">Scientific question 2 · Implementation and optimization</span>
+    <h2 id="q2">Can the implementation learn a dependency that requires antigen information?</h2>
+    <p><strong>Experiment.</strong> First overfit a tiny subset drawn only from the training split, checking sequence loss, contact loss and gradient flow. Then run a separate synthetic plumbing fixture: use a shared decoder prefix and controlled input features for which different antigen inputs require different next-token targets. This makes antigen dependence necessary for solving the fixture.</p>
+    <dl>
+      <dt>Controls</dt>
+      <dd>Use identical initialization and training schedules with informative inputs, constant inputs and independently shuffled input–target assignments. Keep the synthetic fixture outside the biological evaluation. Verify sequence/coordinate mapping, padding masks, causal shifts, finite gradients and actual updates to the intended cross-attention and memory parameters.</dd>
+      <dt>Measurements</dt>
+      <dd>Track loss reduction, next-token accuracy on both input alternatives, contact-loss reduction, and gradient/update norms. A tiny real-data overfit can be achieved by memorization; only the controlled fixture explicitly tests the ability to use the conditioning path.</dd>
+    </dl>
+    <p class="decision"><strong>Interpretation and next decision.</strong> Failure on the controlled task points to implementation or optimization before biological generalization. Success validates basic capability, but says nothing about affinity transfer. Resolve this gate before paying for larger model comparisons.</p>
+  </section>
+
+  <section id="conditioning" aria-labelledby="q3">
+    <span class="question-label">Scientific question 3 · Functional antigen dependence</span>
+    <h2 id="q3">Does antigen information actually influence the model's affinity ranking?</h2>
+    <p><strong>Experiment.</strong> Score the same antibodies with a frozen checkpoint under correct antigen memory, plausible swapped antigens, averaged memory and absent conditioning. Repeat targeted antigen-token interventions and relate their effects to held-out contact annotations only after scoring. Reuse completed diagnostics wherever their cohort and checkpoint match the question.</p>
+    <dl>
+      <dt>Controls</dt>
+      <dd>Include length- and family-matched swaps to reduce trivial distribution changes. A swapped antigen is not automatically a verified nonbinder; use confirmed noncognate pairs where available. Separate inference-time perturbations from a scratch IgLM or a matched model trained without informative antigen input. Verify that attention recording preserves the original model outputs.</dd>
+      <dt>Measurements</dt>
+      <dd>Measure whole-chain and CDR likelihood changes, score-rank agreement, affinity-correlation changes, and the relationship between token intervention effects and interface location. Report per-target effects rather than relying only on a macro average. An attention heatmap is descriptive; functional interventions test whether the information affects predictions.</dd>
+    </dl>
+    <p class="decision"><strong>Interpretation and next decision.</strong> Stable affinity rankings after antigen removal suggest the current score is largely antigen-independent on that cohort. Prediction changes without useful ranking changes show that the model uses context, but not necessarily in a way that tracks affinity. Perturbations alone do not prove that the representation lacks antigen information.</p>
+  </section>
+
+  <section id="readout" aria-labelledby="q4">
+    <span class="question-label">Scientific question 4 · Representation versus scoring</span>
+    <h2 id="q4">Is useful affinity information present but missed by the likelihood score?</h2>
+    <p><strong>Experiment.</strong> Freeze the generator and train a small, regularized affinity readout on decoder/contact representations obtained while scoring candidate sequences. Compare this with the existing whole-chain likelihood score and an otherwise matched antigen-independent readout. Train and select readouts on development data, then evaluate on independent held-out antibody families and, where feasible, held-out targets.</p>
+    <dl>
+      <dt>Controls</dt>
+      <dd>Use a predeclared low-capacity readout and feature summary, the same affinity labels and group splits, and matched tuning budgets. Include shuffled-label controls. Fit normalization and feature selection using training data only. Candidate-derived features belong to this output-side diagnostic; they must never feed back as external antibody conditioning to the generator.</dd>
+      <dt>Measurements</dt>
+      <dd>Compare held-out affinity correlation and pairwise ranking accuracy, with paired differences against both raw likelihood and the antigen-independent readout. Check whether gains survive within-parent evaluation and antigen swaps.</dd>
+    </dl>
+    <p class="decision"><strong>Interpretation and next decision.</strong> A transferable advantage for the antigen-aware readout, alongside poor likelihood ranking, supports a scoring/objective bottleneck. It motivates better affinity supervision or a separate calibrated score. Failure remains inconclusive: too few labels, an inadequate readout or a weak representation could each explain it. This diagnostic is not automatically an improved generator.</p>
+  </section>
+
+  <section id="routing" aria-labelledby="q5">
+    <span class="question-label">Scientific question 5 · Interface information and attention</span>
+    <h2 id="q5">Does routing predicted contact information into attention improve its use?</h2>
+    <p><strong>Experiment.</strong> Train three matched models with the same contact predictor and contact supervision. Disable its attention bias in one model, enable a correctly aligned predicted bias in the second, and shuffle the bias across antigen residues in the third. This isolates the effect of directing attention with the predicted interface signal.</p>
+    <div class="equation" role="math" aria-label="Attention logit equals query key similarity divided by square root of dimension, plus lambda times predicted contact preference.">
+      attention_logit(i, j) = q(i) · k(j) / √d + λ × predicted_contact_preference(i, j)
+    </div>
+    <p>The contact preference must be computed from antigen features and the decoder prefix available before the token being predicted. A contact head that reads final decoder states cannot feed its output back into the same attention computation without a separately defined refinement pass. The proposed implementation should make this ordering explicit.</p>
+    <dl>
+      <dt>Controls</dt>
+      <dd>Match parameters, initial tensors, contact labels, loss coefficients, token exposure and compute budget. Shuffle only the bias placement, preserving its value distribution and antigen padding/chain constraints; keep contact supervision correctly aligned in every arm. Use a bounded nonnegative gate, initially zero, and select its settings on development data. Never supply native epitope or paratope tags at evaluation or generation.</dd>
+      <dt>Measurements</dt>
+      <dd>Measure contact average precision, functional sensitivity to antigen/interface perturbations, CDR and whole-chain NLL, and affinity ranking. Report whether aligned bias outperforms both disabled and shuffled bias. Check whether improved localization actually changes generator behavior.</dd>
+    </dl>
+    <p><strong>Connection to the shared-vector idea.</strong> Adding the same vector to epitope and paratope embeddings could provide a learnable cue, but separate query/key projections mean it does not guarantee a higher attention score. An explicit logit bias makes the intervention easier to interpret. Both approaches still require predicted interface membership at generation time.</p>
+    <p class="decision"><strong>Interpretation and next decision.</strong> A gain over both controls supports useful spatial routing. Better contact prediction or sharper attention without better affinity ranking leaves the affinity objective unresolved. Improvement shared by aligned and shuffled bias suggests a general optimization or regularization effect rather than the claimed interface mechanism.</p>
+  </section>
+
+  <section id="transfer" aria-labelledby="q6">
+    <span class="question-label">Scientific question 6 · Generalization and data sufficiency</span>
+    <h2 id="q6">Does an improvement transfer, and does it grow with independent training data?</h2>
+    <p><strong>Experiment.</strong> Take only a promising, controlled intervention forward. Build nested training subsets containing increasing numbers of independent antibody parents and antigen groups. Keep a fixed development set and a genuinely untouched confirmation set. Compare the intervention and baseline at each data level, including an equal-compute comparison and a small optimization-budget check.</p>
+    <dl>
+      <dt>Controls</dt>
+      <dd>Preserve all existing split protections. Keep architecture and hyperparameter selection fixed across the learning curve. Record unique examples, independent groups, repeated exposures, training tokens and update counts. Use comparable structure sources across splits, or explicitly test the experimental-versus-predicted antigen-structure shift. Previously inspected affinity panels are development evidence.</dd>
+      <dt>Measurements</dt>
+      <dd>Plot training and held-out sequence loss, interface performance, and per-family/per-target affinity ranking against the number of independent groups. Report the paired advantage over IgLM and the matched MANGO control. Separate transfer to new variants of known parents from transfer to new parents or targets.</dd>
+    </dl>
+    <p class="decision"><strong>Interpretation and next decision.</strong> Better training fit without held-out gains suggests memorization or insufficient diversity. A repeatable advantage that grows with independent data supports scaling that approach. Flat learning curves remain ambiguous unless optimization budget, label quality and cohort shift have also been checked. Claims of general MANGO superiority require independent confirmation.</p>
+  </section>
+
+  <section id="reporting" aria-labelledby="reporting-title">
+    <h2 id="reporting-title">A common report for every experiment</h2>
+    <p>Write the hypothesis, primary contrast, minimum worthwhile effect, data allocation and analysis before examining the new results. Keep model selection on development data. Label each conclusion <strong>supported</strong>, <strong>contradicted</strong> or <strong>inconclusive</strong>; uncertainty is a result, not a reason to silently change the endpoint.</p>
+    <div class="table-wrap">
+      <table>
+        <caption class="small">Keep the three outcomes separate throughout the workflow.</caption>
+        <thead><tr><th scope="col">Outcome</th><th scope="col">Primary evidence</th><th scope="col">What it does not establish</th></tr></thead>
+        <tbody>
+          <tr><td>Sequence prediction</td><td>Held-out heavy-chain and CDR NLL</td><td>Correct interface geometry or strong binding</td></tr>
+          <tr><td>Interface learning</td><td>Contact AP plus functional interventions</td><td>Quantitative affinity discrimination</td></tr>
+          <tr><td>Affinity ranking</td><td>Within-family and per-target ranking; paired gain over controls</td><td>Reliable antigen use without the conditioning controls</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li><strong>Optimization variability:</strong> use paired seeds, preferably five for a bounded pilot, and report mean paired effects with sample seed SD. Five seeds do not provide five independent biological datasets.</li>
+      <li><strong>Sampling uncertainty:</strong> use paired group or hierarchical bootstrap intervals at the relevant independent parent/antigen-group level. Preserve model pairing and within-group dependence. Report per-target results; a few targets do not support precise claims about unseen targets.</li>
+      <li><strong>Measurement uncertainty:</strong> retain assay error, censoring and replicate metadata separately. Seed SD and group-bootstrap intervals do not estimate experimental repeatability.</li>
+      <li><strong>Audit trail:</strong> save protocol, data/checkpoint/code hashes, split manifests, training curves, per-example predictions, paired contrasts, confidence intervals and failures under a new <code>artifacts/experiments/&lt;study-id&gt;/</code> directory. Preserve earlier studies.</li>
+      <li><strong>Execution:</strong> use isolated workflow environments, serialize GPU work on the single card, resume completed stages, and report usable results even when another stage fails.</li>
+    </ul>
+  </section>
+
+  <section id="priority" aria-labelledby="priority-title">
+    <h2 id="priority-title">Recommended first pass</h2>
+    <ol>
+      <li>Confirm cohort quality and reuse the existing frozen-checkpoint antigen interventions.</li>
+      <li>Run the tiny trainability checks if they are not already demonstrated for the exact implementation.</li>
+      <li>Test the frozen affinity readout to assess the scoring bottleneck with a small training cost.</li>
+      <li>Run the three-arm attention-bias experiment if the conditioning/routing question remains open.</li>
+      <li>Scale only the approach that survives its controls, and reserve new data for confirmation.</li>
+    </ol>
+    <p>The workflow should surface the earliest unresolved question and link directly to its evidence. Each new model change should name the question it addresses and the observation that would show its explanation was wrong.</p>
+  </section>
+
+  <footer class="small">
+    <p>Related project documentation: <a href="interface_supervision.md">interface supervision</a> · <a href="epitope_diagnostics.md">epitope diagnostics</a> · <a href="affinity_bottleneck_audit.md">affinity bottleneck audit</a>. All proposed comparisons require their own recorded protocol before execution.</p>
+  </footer>
+</main>
+</body>
+</html>

@@ -117,6 +117,15 @@ embedders:
     representation: "sequence"
     requires_hf_token: true
 
+  esm3_structure:
+    method: esm3
+    class: learned
+    label: "ESM3 (sequence + structure)"
+    model_name: "esm3-sm-open-v1"
+    representation: "sequence_structure"
+    conditioning_scope: antigen_sequence_backbone_only_v1
+    requires_hf_token: true
+
   esmif:
     method: esmif
     class: learned
@@ -130,14 +139,6 @@ embedders:
     model: "vanilla_models"         # vanilla_models | ca_models | soluble_models
     noise: 2                        # 2 | 10 | 20 | 30
 
-  afm:
-    method: afm
-    class: learned
-    label: "AF-M"
-    representation: "single"        # single | pair | structure
-    # Deferred AF-M must follow the same antigen-only input contract.
-    conditioning_scope: antigen_only_v1
-
 # First milestone: prove the complete train/inference path with the simplest
 # antigen representation. Additional embedders remain registered above but are
 # deliberately outside the active DAG until this baseline is reliable.
@@ -149,7 +150,8 @@ model:
   # Architecture follows IgLM's format per the grant: 4 layers, 8 heads (~13M).
   # Antigen tokens are projected into GPT-2 and followed by a learned H/L
   # output selector. No antibody sequence or embedding is a model input.
-  architecture: antigen_chain_gpt2_v3
+  # Selector/BOS/antibody position IDs reset to 0/1/2 after the antigen prefix.
+  architecture: antigen_chain_fixed_position_gpt2_v1
   target_chains: [heavy, light]
   epochs: 10
   lr: 1.0e-4

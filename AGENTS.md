@@ -1,5 +1,10 @@
 # MANGO agent handoff
 
+> Repository layout after the cleanup (`CLEANUP_PLAN.md`): supported code is `run_gpu.sh`,
+> `workflow/`, `config/`, `mango/`, `tests/`, `docs/`. Side studies live in `experiments/`
+> (unsupported, launched by `experiments/run_experiment.sh`). Files awaiting deletion are in
+> `_to_review/`. `scripts/check.sh` runs the fast CPU-only checks.
+
 This repository is the active MANGO project. Treat this file as persistent
 context for coding agents working on a single NVIDIA GPU cloud instance.
 
@@ -35,16 +40,20 @@ Only after both smoke outcomes have been understood and fixed run:
 ```
 
 Read `docs/cloud_gpu_setup.md` before changing installation or execution logic.
-The launcher is the supported cloud interface; `mango/MANGORunner.py` is legacy.
+The launcher is the supported cloud interface; the old `MANGORunner` API was retired (see `_to_review/legacy/`).
 
 ## Current supported scope
 
-The default full `study` runs all seven implemented antigen representations,
+The default full `study` runs all eight implemented antigen representations,
 sequentially on one GPU: `one_hot`, `biopython`, `pyrosetta_pre`, `esm2`,
-`esm3`, `esmif`, and `proteinmpnn`. Plain `smoke` and `small` retain the five
-non-gated validation methods; use `smoke-all` before the seven-method study.
+`esm3`, `esm3_structure`, `esmif`, and `proteinmpnn`. Plain `smoke` and `small` retain the five
+non-gated validation methods; use `smoke-all` before the eight-method study.
 
-- ESM3 requires `HF_TOKEN` after accepting the Hugging Face model terms.
+- ESM3 requires `HF_TOKEN` for uncached weights after accepting the Hugging Face model terms.
+  Keep both sequence-only and sequence-plus-structure variants; the structural
+  variant uses only antigen coordinates, with explicit multichain breaks.
+- On the local RTX 4070, use `MANGO_EXECUTION_CONFIG=config/local_12gb.yaml`.
+  GPU commands require access outside the filesystem sandbox on this host.
 - PyRosetta PRE participates in the full study, but its real mmCIF chain mapping
   still needs validation in `smoke-all` before its scientific results are used.
 - Fixed-backbone Rosetta `InterfaceAnalyzer` scoring is different from the PRE
@@ -137,7 +146,7 @@ snakemake --lint
 snakemake --sdm conda --cores 1 --dry-run
 ```
 
-Tests may need to run inside their Snakemake Conda environment because the host
+Tests may need to run inside their Snakemake Conda environment (no single env has every dependency; `tests/` and `experiments/tests/` modules each pass in at least one `.snakemake/conda-gpu/*/bin/python`) because the host
 Python intentionally does not contain pandas, PyTorch, or analysis packages.
 Do not treat missing host-Python packages as evidence that the isolated workflow
 environment is broken.

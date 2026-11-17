@@ -53,7 +53,7 @@ On the instance:
 
 ```bash
 cd /PATH/MANGO
-chmod +x run_gpu.sh install_mango.sh
+chmod +x run_gpu.sh
 ```
 
 The `MANGO` Git repository can remain nested inside the larger pipeline
@@ -64,7 +64,7 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 | Mode | Embedders | Extra user action |
 |---|---|---|
 | `smoke` / `small` | one-hot, BioPython, ESM2, ESM-IF, ProteinMPNN; Rosetta interface QC after Boltz/Chai | PyRosetta academic/non-commercial eligibility |
-| `study` | all seven implemented embedders, including ESM3 and PyRosetta PRE; Rosetta interface QC | accepted ESM3 terms, `HF_TOKEN`, and PyRosetta eligibility |
+| `study` | all eight embedders, including both ESM3 variants and PyRosetta PRE; Rosetta interface QC | accepted ESM3 terms, `HF_TOKEN` for uncached assets, and PyRosetta eligibility |
 | `esm2-ablation` | ESM2 8M, 35M, and 150M plus the existing 650M evaluation | completed full-study `esm2` 650M `eval.json` |
 | `antigen-controls` | shape-matched constant/random, mean-pooled, shuffled, and cross-attention ESM2 controls | completed ESM2 650M embeddings and `eval.json` |
 | `antigen-length-ablation` | constant, random and token-merged ESM2 at 1 token, ¼L, ½L, ¾L and L | completed ESM2 650M embeddings and `eval.json` |
@@ -80,7 +80,12 @@ workspace; nothing in the runner requires flattening or removing its `.git`.
 | `asd-scaling-8k` | add three one-epoch 8k models to the frozen 2k/4k comparison | completed `asd-scaling`; relaxes antigen frequency cap; see [scaling](asd_scaling.md#8000-record-extension) |
 | `asd-scaling-16k` | add 16k IgLM/cross-attention controls and regular MANGO at 2k/4k/8k/16k | completed 8k comparison; dominant-antigen shuffle limit is disclosed; see [scaling](asd_scaling.md#16000-record-extension-and-regular-mango) |
 | `asd-scaling-fixed-positions` | add fixed-position prefix MANGO at 2k/4k/8k/16k | completed 16k/regular comparison; same frozen cohorts and cached ESM2 |
-| `*-esm3` | default set plus ESM3 | accept model terms and set `HF_TOKEN` |
+| `native-mechanism-smoke` / `native-mechanism-study` | freezing × correct/shuffled/constant memory, pairing loss and one-hot controls | protected native cohort must pass the data gate; see [mechanism pilot](native_mechanism_study.md) |
+| `legacy-adapter-affinity` | existing paired/shuffled frozen adapters and IgLM continuation on the same affinity panel | completed v1 checkpoints; inference only; see [adapter affinity](legacy_adapter_affinity.md) |
+| `affinity-ranking-pilot-smoke` / `affinity-ranking-pilot` | scratch IgLM/MANGO × CE/ranking, five paired seeds | exploratory one-parent intervention; see [ranking pilot](affinity_ranking_pilot.md) |
+| `epitope-diagnostics-smoke` / `epitope-diagnostics` | frozen-checkpoint antigen interventions, CDR scores and structural contact alignment | completed ranking pilot; inference only; see [epitope diagnostics](epitope_diagnostics.md) |
+| `interface-supervision-smoke` / `interface-supervision` | residue-level geometry × contact-gradient supervision, plus matched IgLM | exploratory five-seed factorial study; see [interface supervision](interface_supervision.md) |
+| `*-esm3` | default set plus sequence-only and sequence-plus-structure ESM3 | accept model terms and set `HF_TOKEN` |
 | `*-pyrosetta` | default set plus PyRosetta PRE | academic/non-commercial eligibility |
 | `*-all` | every implemented embedder above | both requirements |
 
@@ -91,6 +96,10 @@ followed by fixed-backbone Rosetta interface quality-control scoring. Figure 2
 and the minimal Rosetta paired plot are part of strict GPU completion.
 
 ## 5. Optional gated setup
+
+For the local 12 GB RTX 4070, prefix smoke, smoke-all and study commands with
+`MANGO_EXECUTION_CONFIG=config/local_12gb.yaml`. This explicit overlay sets the
+minimum VRAM and generation batch size; CUDA kernel checks remain mandatory.
 
 ### ESM3
 
@@ -104,6 +113,13 @@ export HF_TOKEN=hf_...
 Do not put the token in YAML, Git, shell history, or a job script committed to
 the repository. On a managed platform, use its secret/environment-variable
 facility.
+
+The study keeps the sequence-only `esm3` baseline and adds `esm3_structure`.
+The latter supplies only antigen-chain sequences and resolved N/CA/C/O atom37
+coordinates in their original multichain frame, with masked missing atoms and
+explicit chain breaks. The structure-token encoder is downloaded and verified
+during prefetch. Separate tags and training hashes prevent sequence-only and
+structural representations or their trained checkpoints from being mixed.
 
 ### PyRosetta
 
@@ -299,8 +315,8 @@ Plain study includes both ESM3 and PyRosetta PRE. Validate both first with:
 ./run_gpu.sh study
 ```
 
-The suffixed study modes remain available for focused six- or seven-method
-reruns, but `study-all` and plain `study` now select the same seven embedders.
+The suffixed study modes remain available for focused reruns, but `study-all`
+and plain `study` now select the same eight embedders.
 
 Even `smoke` downloads the complete SAbDab2 archive once (about 876 MB
 compressed and roughly 4.1 GB extracted), because Zenodo distributes it as one

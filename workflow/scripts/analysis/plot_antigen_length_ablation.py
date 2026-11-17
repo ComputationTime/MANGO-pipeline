@@ -16,7 +16,7 @@ import plot_common as pc
 SPLITS = ("train", "test")
 LEVELS = (None, Fraction(1, 4), Fraction(1, 2), Fraction(3, 4), Fraction(1))
 LABELS = ("1 token", "¼L", "½L", "¾L", "L")
-ARCHITECTURE = "antigen_chain_gpt2_v3"
+PREFIX_ARCHITECTURES = {"antigen_chain_gpt2_v3", "antigen_chain_fixed_position_gpt2_v1"}
 MODES = ("constant", "random", "esm2_merged")
 MERGING = "cosine_bipartite_weighted_v1"
 
@@ -58,6 +58,12 @@ def plot_antigen_length_ablation(eval_jsons, reference_eval, embedders, specs,
     fingerprint = reference.get("cohort_sha256")
     if not fingerprint:
         raise ValueError("reference evaluation must record its cohort fingerprint")
+    reference_architecture = reference.get("architecture")
+    if reference_architecture is None:
+        with open(Path(reference_eval).parent / "model_config.json") as handle:
+            reference_architecture = json.load(handle).get("architecture")
+    if reference_architecture not in PREFIX_ARCHITECTURES:
+        raise ValueError("the reference must use a supported prefix architecture")
     payloads = {}
     for path in eval_jsons:
         with open(path) as handle:
@@ -97,10 +103,9 @@ def plot_antigen_length_ablation(eval_jsons, reference_eval, embedders, specs,
         prefix = payload.get("antigen_in_decoder_prefix")
         if is_reference and architecture is None:
             # Older reference files record architecture in the model contract.
-            with open(Path(reference_eval).parent / "model_config.json") as handle:
-                architecture = json.load(handle).get("architecture")
-            prefix = architecture == ARCHITECTURE
-        if architecture != ARCHITECTURE or prefix is not True:
+            architecture = reference_architecture
+            prefix = True
+        if architecture != reference_architecture or prefix is not True:
             raise ValueError(f"{tag}: length controls require the common prefix architecture")
         if int(payload["d_ag"]) != 1280 or int(spec.get("width", 1280)) != 1280:
             raise ValueError(f"{tag}: embedding width must match ESM2 (1280)")

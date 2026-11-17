@@ -75,7 +75,7 @@ rule train_model:
         train_splits=config["model"]["train_splits"],
         val_splits=config["model"]["val_splits"],
         model_cfg=lambda w: model_config_for_tag(tag_for_run(w.run)),
-        global_state=config,
+        global_state=lambda w: model_global_state_for_tag(tag_for_run(w.run)),
     log:
         f"{LOG_DIR}/train_{{run}}.log",
     threads: 2

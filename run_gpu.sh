@@ -4,7 +4,8 @@ set -euo pipefail
 # One-command local NVIDIA GPU runner.
 #   ./run_gpu.sh smoke        five-record plumbing run (default)
 #   ./run_gpu.sh small        bounded multi-record validation run
-#   ./run_gpu.sh study        full seven-embedder SAbDab2 study
+#   ./run_gpu.sh study        full eight-embedder SAbDab2 study
+#   ./run_gpu.sh train-all    train/evaluate all eight models and matched scratch IgLM
 #   ./run_gpu.sh smoke-esm3   smoke + gated ESM3
 #   ./run_gpu.sh study-esm3   full study + gated ESM3
 #   ./run_gpu.sh smoke-pyrosetta / study-pyrosetta
@@ -14,22 +15,17 @@ set -euo pipefail
 #   ./run_gpu.sh antigen-controls (constant, random, pooled, shuffled, cross-attention)
 #   ./run_gpu.sh antigen-length-ablation (constant/random/token-merged ESM2 length sweep)
 #   ./run_gpu.sh iglm-baseline (IgLM from scratch, then the context-length figure)
-#   ./run_gpu.sh abrank-transfer (audited AbRank controls, then SAbDab2 fine-tuning)
-#   ./run_gpu.sh asd-transfer (audited ASD 2.0 controls, then SAbDab2 fine-tuning)
-#   ./run_gpu.sh asd-loss-comparison (ESM2 CE/focal, normal/cross-attention, with/without ASD)
-#   ./run_gpu.sh asd-prototype (small HER2-free ASD, one epoch per training stage)
-#   ./run_gpu.sh asd-prototype-iglm (matched IgLM controls added to the prototype)
-#   ./run_gpu.sh antigen-diagnostics (small paired probes of pilot checkpoints)
-#   ./run_gpu.sh antigen-diagnostic-training (one-epoch controlled follow-ups)
-#   ./run_gpu.sh asd-scaling (nested ASD-only 2k/4k data-size comparison)
-#   ./run_gpu.sh asd-scaling-8k (extend the frozen comparison to 8k records)
-#   ./run_gpu.sh asd-scaling-16k (16k extension and regular MANGO at every size)
-#   ./run_gpu.sh asd-scaling-fixed-positions (add fixed-position MANGO at every size)
+#   Side studies (ASD, AbRank, OpenAlphaSeq, affinity, ...): ./experiments/run_experiment.sh
 
 MODE="${1:-smoke}"
+if [[ "$MODE" == "-h" || "$MODE" == "--help" || "$MODE" == "help" ]]; then
+  sed -n '4,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
 case "$MODE" in
-  smoke|small|study|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls|antigen-length-ablation|iglm-baseline|abrank-transfer|asd-transfer|asd-loss-comparison|asd-prototype|asd-prototype-iglm|antigen-diagnostics|antigen-diagnostic-training|asd-scaling|asd-scaling-8k|asd-scaling-16k|asd-scaling-fixed-positions) ;;
-  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline | abrank-transfer | asd-transfer | asd-loss-comparison | asd-prototype | asd-prototype-iglm | antigen-diagnostics | antigen-diagnostic-training | asd-scaling | asd-scaling-8k | asd-scaling-16k | asd-scaling-fixed-positions" >&2; exit 2 ;;
+  smoke|small|study|train-all|smoke-esm3|small-esm3|study-esm3|smoke-pyrosetta|small-pyrosetta|study-pyrosetta|smoke-all|small-all|study-all|weights|weights-esm3|weights-pyrosetta|weights-all|esm2-ablation|antigen-controls|antigen-length-ablation|iglm-baseline) ;;
+  *) echo "usage: $0 {smoke|small|study|weights}[-esm3|-pyrosetta|-all] | train-all | esm2-ablation | antigen-controls | antigen-length-ablation | iglm-baseline" >&2
+     echo "Side-study modes now live in experiments/run_experiment.sh (unsupported)." >&2; exit 2 ;;
 esac
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,172 +76,15 @@ if [[ ! -x "$DRIVER/bin/snakemake" ]]; then
     snakemake==9.25.1 pandas==2.3.3
 fi
 
-if [[ "$MODE" == "asd-scaling" || "$MODE" == "asd-scaling-8k" || "$MODE" == "asd-scaling-16k" || "$MODE" == "asd-scaling-fixed-positions" ]]; then
-  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
-  SCALE_CONFIG=config/asd_scaling.yaml
-  SCALE_REPORT=workflow/scripts/report_asd_scaling.py
-  if [[ "$MODE" == "asd-scaling-fixed-positions" ]]; then
-    SCALE_CONFIG=config/asd_scaling_fixed_positions.yaml
-    SCALE_REPORT=workflow/scripts/report_asd_scaling_8k.py
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_scaling_16k.py --config "$SCALE_CONFIG"
-  elif [[ "$MODE" == "asd-scaling-16k" ]]; then
-    SCALE_CONFIG=config/asd_scaling_16k.yaml
-    SCALE_REPORT=workflow/scripts/report_asd_scaling_8k.py
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_scaling_16k.py
-  elif [[ "$MODE" == "asd-scaling-8k" ]]; then
-    SCALE_CONFIG=config/asd_scaling_8k.yaml
-    SCALE_REPORT=workflow/scripts/report_asd_scaling_8k.py
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_scaling_8k.py
-  else
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_scaling.py
-  fi
-  export MANGO_ASD_SCALING_CONFIG="$SCALE_CONFIG"
-  mapfile -t SCALE_SETTINGS < <("$DRIVER/bin/python" -c \
-    'import sys,yaml; c=yaml.safe_load(open(sys.argv[1])); print(c["experiment_root"]); print(*c["runs"], sep="\n")' "$SCALE_CONFIG")
-  SCALE_ROOT="${SCALE_SETTINGS[0]}"
-  SCALE_SNAKE=("$DRIVER/bin/snakemake" -s workflow/asd_scaling.smk \
-    --profile workflow/profiles/gpu --rerun-incomplete)
-  for run in "${SCALE_SETTINGS[@]:1}"; do
-    if ! "${SCALE_SNAKE[@]}" -- "$SCALE_ROOT/runs/$run/eval.json"; then
-      echo "[asd-scaling/$run] incomplete; continuing with other models." >&2
-    fi
-    "$DRIVER/bin/python" "$SCALE_REPORT" --config "$SCALE_CONFIG" --status-only
-  done
-  if ! "${SCALE_SNAKE[@]}" --keep-going; then
-    "$DRIVER/bin/python" "$SCALE_REPORT" --config "$SCALE_CONFIG" --status-only
-    exit 1
-  fi
-  exit 0
-fi
-
-if [[ "$MODE" == "antigen-diagnostic-training" ]]; then
-  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
-  mapfile -t DIAGNOSTIC_SETTINGS < <("$DRIVER/bin/python" -c \
-    'import yaml; c=yaml.safe_load(open("config/antigen_diagnostic_training.yaml")); print(c["experiment_root"]); print(*c["arms"], sep="\n")')
-  DIAGNOSTIC_ROOT="${DIAGNOSTIC_SETTINGS[0]}"
-  DIAGNOSTIC_SNAKE=("$DRIVER/bin/snakemake" -s workflow/antigen_diagnostic_training.smk \
-    --profile workflow/profiles/gpu --rerun-incomplete)
-  for arm in "${DIAGNOSTIC_SETTINGS[@]:1}"; do
-    if ! "${DIAGNOSTIC_SNAKE[@]}" -- "$DIAGNOSTIC_ROOT/$arm/native/complete.json"; then
-      echo "[diagnostic-training/$arm] incomplete; continuing with other arms." >&2
-    fi
-  done
-  "${DIAGNOSTIC_SNAKE[@]}" --keep-going
-  exit 0
-fi
-
-if [[ "$MODE" == "antigen-diagnostics" ]]; then
-  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
-  mapfile -t DIAGNOSTIC_SETTINGS < <("$DRIVER/bin/python" -c \
-    'import yaml; c=yaml.safe_load(open("config/antigen_diagnostics.yaml")); print(c["experiment_root"]); print(*c["probes"], sep="\n")')
-  DIAGNOSTIC_ROOT="${DIAGNOSTIC_SETTINGS[0]}"
-  DIAGNOSTIC_SNAKE=("$DRIVER/bin/snakemake" -s workflow/antigen_diagnostics.smk \
-    --profile workflow/profiles/gpu --rerun-incomplete)
-  for model in "${DIAGNOSTIC_SETTINGS[@]:1}"; do
-    if ! "${DIAGNOSTIC_SNAKE[@]}" -- "$DIAGNOSTIC_ROOT/probes/$model/complete.json"; then
-      echo "[diagnostics/$model] incomplete; continuing with other probes." >&2
-    fi
-  done
-  "${DIAGNOSTIC_SNAKE[@]}" --keep-going
-  exit 0
-fi
-
-if [[ "$MODE" == "asd-prototype-iglm" ]]; then
-  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
-  mapfile -t IGLM_SETTINGS < <("$DRIVER/bin/python" -c \
-    'import yaml; c=yaml.safe_load(open("config/asd_prototype_iglm.yaml")); print(c["experiment_root"]); print(c["mango_root"]); print(c["cohort_dir"])')
-  IGLM_ROOT="${IGLM_SETTINGS[0]}"
-  IGLM_MANGO="${IGLM_SETTINGS[1]}"
-  IGLM_COHORT="${IGLM_SETTINGS[2]}"
-  IGLM_SNAKE=("$DRIVER/bin/snakemake" -s workflow/asd_prototype_iglm.smk \
-    --profile workflow/profiles/gpu --rerun-incomplete)
-  IGLM_REPORT=("$DRIVER/bin/python" workflow/scripts/report_prototype_iglm.py \
-    --root "$IGLM_ROOT" --mango-root "$IGLM_MANGO" --cohort "$IGLM_COHORT")
-  for phase in sabdab2_scratch sabdab2_finetuned asd; do
-    if ! "${IGLM_SNAKE[@]}" -- "$IGLM_ROOT/$phase/eval.json"; then
-      echo "[IgLM/$phase] incomplete; continuing with other stages." >&2
-    fi
-    "${IGLM_REPORT[@]}"
-  done
-  if ! "${IGLM_SNAKE[@]}" --keep-going; then
-    echo "Some IgLM outputs remain incomplete; writing the partial report." >&2
-  fi
-  "${IGLM_REPORT[@]}" --require-complete
-  exit 0
-fi
-
-if [[ "$MODE" == "asd-loss-comparison" || "$MODE" == "asd-prototype" ]]; then
-  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
-  LOSS_CONFIG="config/${MODE//-/_}.yaml"
-  mapfile -t LOSS_SETTINGS < <("$DRIVER/bin/python" -c \
-    'import sys,yaml; c=yaml.safe_load(open(sys.argv[1])); print(c["experiment_root"]); print(c["cohort_dir"]); print(*[f"{loss}/{arch}" for loss in c["objectives"] for arch in c["architectures"]], sep="\n")' "$LOSS_CONFIG")
-  LOSS_ROOT="${LOSS_SETTINGS[0]}"
-  LOSS_COHORT="${LOSS_SETTINGS[1]}"
-  LOSS_ARMS=("${LOSS_SETTINGS[@]:2}")
-  mkdir -p "$LOSS_ROOT"
-  if [[ "$MODE" == "asd-prototype" ]]; then
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_prototype.py --config "$LOSS_CONFIG"
-  else
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_transfer.py --output "$LOSS_COHORT"
-  fi
-  LOSS_SNAKE=("$DRIVER/bin/snakemake" -s workflow/asd_loss_comparison.smk \
-    --profile workflow/profiles/gpu --configfile "$LOSS_CONFIG" --rerun-incomplete)
-  for arm in "${LOSS_ARMS[@]}"; do
-    if ! "${LOSS_SNAKE[@]}" -- "$LOSS_ROOT/sabdab2_scratch/$arm/eval.json"; then
-      echo "[sabdab2_scratch/$arm] incomplete; continuing with other models." >&2
-    fi
-    "$DRIVER/bin/python" workflow/scripts/report_asd_loss_comparison.py --root "$LOSS_ROOT"
-  done
-  for arm in "${LOSS_ARMS[@]}"; do
-    for phase in sabdab2_finetuned asd; do
-      if ! "${LOSS_SNAKE[@]}" -- "$LOSS_ROOT/$phase/$arm/eval.json"; then
-        echo "[$phase/$arm] incomplete; continuing with other models." >&2
-      fi
-      "$DRIVER/bin/python" workflow/scripts/report_asd_loss_comparison.py --root "$LOSS_ROOT"
-    done
-  done
-  if ! "${LOSS_SNAKE[@]}" --keep-going; then
-    echo "Some loss-comparison outputs remain incomplete; writing the partial report." >&2
-  fi
-  "$DRIVER/bin/python" workflow/scripts/report_asd_loss_comparison.py --root "$LOSS_ROOT" --require-complete
-  exit 0
-fi
-
-if [[ "$MODE" == "abrank-transfer" || "$MODE" == "asd-transfer" ]]; then
-  export MPLCONFIGDIR="$ROOT_DIR/artifacts/cache/matplotlib"
-  TRANSFER_DATASET="${MODE%-transfer}"
-  mapfile -t TRANSFER_SETTINGS < <("$DRIVER/bin/python" -c \
-    'import sys,yaml; c=yaml.safe_load(open(sys.argv[1])); print(c["experiment_root"]); print(c["cohort_dir"]); print(*c["controls"], sep="\n")' \
-    "config/${TRANSFER_DATASET}_transfer.yaml")
-  TRANSFER_ROOT="${TRANSFER_SETTINGS[0]}"
-  TRANSFER_COHORT="${TRANSFER_SETTINGS[1]}"
-  TRANSFER_TAGS=("${TRANSFER_SETTINGS[@]:2}")
-  if [[ "$TRANSFER_DATASET" == "asd" ]]; then
-    "$DRIVER/bin/python" workflow/scripts/prepare_asd_transfer.py --output "$TRANSFER_COHORT"
-  fi
-  TRANSFER_SNAKE=("$DRIVER/bin/snakemake" -s "workflow/${TRANSFER_DATASET}_transfer.smk" \
-    --profile workflow/profiles/gpu --rerun-incomplete)
-  for phase in "$TRANSFER_DATASET" sabdab2; do
-    for tag in "${TRANSFER_TAGS[@]}"; do
-      if ! "${TRANSFER_SNAKE[@]}" -- "$TRANSFER_ROOT/$phase/runs/$tag/eval.json"; then
-        echo "[$phase/$tag] incomplete; continuing with other controls." >&2
-      fi
-    done
-  done
-  if ! "${TRANSFER_SNAKE[@]}" --keep-going; then
-    echo "Some requested transfer outputs remain incomplete; writing the partial report." >&2
-  fi
-  "$DRIVER/bin/python" workflow/scripts/report_abrank_transfer.py --root "$TRANSFER_ROOT" --require-complete
-  exit 0
-fi
-
 CONFIG_ARGS=(--configfile config/gpu.yaml)
 if [[ "$MODE" == smoke* ]]; then
   CONFIG_ARGS+=(config/smoke.yaml)
 elif [[ "$MODE" == small* ]]; then
   CONFIG_ARGS+=(config/small.yaml)
 fi
-if [[ "$MODE" == "study" ]]; then
+if [[ "$MODE" == "train-all" ]]; then
+  CONFIG_ARGS+=(config/gpu_all.yaml config/iglm_baseline.yaml)
+elif [[ "$MODE" == "study" ]]; then
   CONFIG_ARGS+=(config/gpu_all.yaml)
 elif [[ "$MODE" == "esm2-ablation" ]]; then
   CONFIG_ARGS+=(config/esm2_ablation.yaml)
@@ -260,20 +99,27 @@ elif [[ "$MODE" == *-pyrosetta ]]; then
 elif [[ "$MODE" == *-all ]]; then
   CONFIG_ARGS+=(config/gpu_all.yaml)
 fi
+if [[ -n "${MANGO_EXECUTION_CONFIG:-}" ]]; then
+  if [[ ! -f "$MANGO_EXECUTION_CONFIG" ]]; then
+    echo "Execution configuration not found: $MANGO_EXECUTION_CONFIG" >&2
+    exit 2
+  fi
+  CONFIG_ARGS+=("$MANGO_EXECUTION_CONFIG")
+fi
 
 SNAKEMAKE=("$DRIVER/bin/snakemake" -s workflow/Snakefile \
   --profile workflow/profiles/gpu "${CONFIG_ARGS[@]}" --rerun-incomplete)
 
 EMBEDDERS=(one_hot biopython esm2 esmif proteinmpnn)
-if [[ "$MODE" == "study" ]]; then
-  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esmif proteinmpnn)
+if [[ "$MODE" == "study" || "$MODE" == "train-all" ]]; then
+  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esm3_structure esmif proteinmpnn)
 elif [[ "$MODE" == *-pyrosetta || "$MODE" == *-all ]]; then
   EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esmif proteinmpnn)
 fi
 if [[ "$MODE" == *-esm3 ]]; then
-  EMBEDDERS=(one_hot biopython esm2 esm3 esmif proteinmpnn)
+  EMBEDDERS=(one_hot biopython esm2 esm3 esm3_structure esmif proteinmpnn)
 elif [[ "$MODE" == *-all ]]; then
-  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esmif proteinmpnn)
+  EMBEDDERS=(one_hot biopython pyrosetta_pre esm2 esm3 esm3_structure esmif proteinmpnn)
 fi
 
 run_for_embedder() {
@@ -302,7 +148,7 @@ refresh_review_bundle() {
 
 requires_prefetch() {
   case "$1" in
-    pyrosetta_pre|esm2|esm3|esmif|proteinmpnn) return 0 ;;
+    pyrosetta_pre|esm2|esm3|esm3_structure|esmif|proteinmpnn) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -310,6 +156,28 @@ requires_prefetch() {
 # Force the preflight on every invocation so a manifest copied from another
 # machine can never bypass validation of this GPU and driver.
 "${SNAKEMAKE[@]}" --force gpu_preflight
+
+if [[ "$MODE" == "train-all" ]]; then
+  # Same scientific configurations/run IDs as study. External affinity scoring
+  # needs trained likelihood models, without generating/folding de novo designs.
+  RUN_FAILED=0
+  for embedder in "${EMBEDDERS[@]}"; do
+    if ! run_for_embedder "$embedder" weights; then
+      echo "[$embedder] asset setup incomplete; attempting evaluation anyway." >&2
+    fi
+    if ! run_for_embedder "$embedder" evaluate --rerun-triggers mtime; then
+      RUN_FAILED=1
+      echo "[$embedder] training/evaluation incomplete; continuing." >&2
+    fi
+    "$DRIVER/bin/python" experiments/scripts/report_affinity_training.py
+  done
+  if ! "${SNAKEMAKE[@]}" --keep-going iglm_baseline; then
+    RUN_FAILED=1
+  fi
+  "$DRIVER/bin/python" experiments/scripts/report_affinity_training.py
+  echo "Training/evaluation finished; AlphaSeq affinity scoring is a separate stage."
+  exit "$RUN_FAILED"
+fi
 
 if [[ "$MODE" == "iglm-baseline" ]]; then
   if [[ ! -f artifacts/analysis/figures/fig9_antigen_context_length_ablation_data.csv ]]; then
