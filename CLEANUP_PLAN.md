@@ -1,6 +1,6 @@
 # MANGO cleanup plan
 
-Status: **draft, agreed scope, no code moved yet.**
+Status: **Phases 0-4 done and committed; Phase 5 smoke verification in progress** (see "Execution log" at the end).
 Written so it can be resumed by Claude, Codex or a human. Work through the
 phases in order and tick the boxes. Each phase should be its own commit.
 
@@ -126,3 +126,44 @@ After Phases 1 and 2 the core should be roughly: `fetch, standardize, process, e
 > Read `CLEANUP_PLAN.md` and `AGENTS.md`. We are at Phase N. Do only that phase,
 > commit it separately, run the validation commands, and report what you moved
 > and anything from "Open questions" that you had to decide.
+
+
+## Execution log (what was actually done)
+
+Commits: `80d4edf` snapshot (tag `pre-cleanup`, branch `archive/experiments`), then one commit each for
+Phases 1-4 (`git log --oneline`).
+
+**Deviations from the plan above**
+
+- `experiments/` is flat and mirrors the repo (`experiments/{workflow,scripts,config,docs,tests}`) instead of one folder
+  per study. Studies share a lot of code (`affinity_study_common`, `antigen_diagnostics`, ...) and hard-code
+  `workflow/scripts/...` paths, so per-study folders would have meant rewriting imports for little benefit.
+  `experiments/README.md` has the study index. Studies still import shared helpers from `workflow/scripts/`.
+- Side-study modes moved out of `run_gpu.sh` into `experiments/run_experiment.sh`.
+- The tracked `artifacts/` files were untracked (`git rm --cached`), files kept on disk. `MANGO_BINDING_DATA/`
+  (84 MB, previously untracked) sits in `_to_review/` and is gitignored there to keep it out of history.
+- Phase 3 items **deliberately not done** (risk vs. benefit; do them as separate, tested changes if wanted):
+  regrouping `workflow/scripts/` into subfolders, generating the per-embedder rules in `embed.smk` from a table,
+  splitting `run_gpu.sh` further, per-key comments for every `config.yaml` entry (see `docs/config_reference.md`).
+- `setup.py` left untouched (see open questions).
+
+**Verification performed**
+
+- Test baseline: no single conda env has every dependency, so each test module was run against every
+  `.snakemake/conda-gpu/*/bin/python` and the best result kept. Before: 63 modules OK / 6 ERR. After Phases 2-3:
+  identical per-module results (62 OK + 7 ERR at first, then test_transfer_launcher fixed -> identical).
+  The 6 ERR modules fail the same way before and after (missing deps in every env).
+- Core DAG dry-run: 0 errors. All 22 moved workflows parse with `snakemake -n`. A repo-wide check found no
+  dangling `workflow|config|experiments|docs|tests/...` path strings.
+- `./run_gpu.sh smoke` on the GPU: see below.
+
+## Still open for the owner
+
+1. No `LICENSE` file exists; choose one. `setup.py` still names the original author and an old
+   `package_data`; decide whether to drop it or keep a pip-installable `mango` package.
+2. Possibly dead but kept (have tests/docs but nothing calls them): `chai_memory`, `embedding_cache`,
+   `embedding_benchmark`, `time_command`. FLAb/AlphaSeq scripts have no launcher mode.
+3. `esm2-ablation`, `antigen-length-ablation`, `iglm-baseline` (figs 7 and 9) are still core launcher modes because
+   they are wired into `rules/analysis/plots.smk`. Say if they should move to `experiments/` too.
+4. `docs/module_signatures.md` / `planned_modules.md` may still describe removed legacy analysis modules.
+5. Review and delete `_to_review/` when satisfied; remove the empty `review/` leftovers if any.
