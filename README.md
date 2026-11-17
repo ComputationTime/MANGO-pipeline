@@ -37,7 +37,8 @@ card add `MANGO_EXECUTION_CONFIG=config/local_12gb.yaml`.
 Smoke metrics only prove the plumbing; they are not scientifically meaningful.
 Run `smoke` and `smoke --all` and look at their report before launching `study`.
 
-Gated/licensed pieces: ESM3 needs accepted Hugging Face terms and `HF_TOKEN`
+MANGO's own code is MIT-licensed (see [LICENSE](LICENSE)); the models and tools it
+downloads carry their own terms. Gated/licensed pieces: ESM3 needs accepted Hugging Face terms and `HF_TOKEN`
 (export it; never write it into the repo). PyRosetta needs an eligible academic
 or commercial licence. Check the licences of Boltz-2, Chai-1 and the other
 upstream models before redistributing results.
