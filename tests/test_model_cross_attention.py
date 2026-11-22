@@ -8,7 +8,7 @@ from unittest.mock import patch
 import torch
 import torch.nn.functional as F
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workflow" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from model_common import MangoModel
 
 

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pandas as pd
 import torch
 
-SCRIPTS = Path(__file__).resolve().parents[1] / 'workflow/scripts'
+SCRIPTS = Path(__file__).resolve().parents[1] / 'scripts'
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(SCRIPTS / 'analysis'))
 import train_mango

@@ -6,8 +6,8 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'workflow' / 'scripts'))
-from training_losses import causal_token_losses, loss_configuration
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from mango.utils.training_losses import causal_token_losses, loss_configuration
 from model_common import MangoModel
 
 

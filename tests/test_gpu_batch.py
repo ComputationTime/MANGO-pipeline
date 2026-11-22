@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "workflow" / "scripts"
+SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from embed_batch import batch_embed
@@ -42,7 +42,7 @@ class GPUBatchTests(unittest.TestCase):
                 spec={"method": "one_hot", "class": "naive", "label": "One-hot"},
                 seq_source="resolved",
                 splits=["train"],
-                implementation=str(SCRIPTS / "embed_antigen_one_hot.py"),
+                implementation=str(SCRIPTS / "embedding" / "embed_antigen_one_hot.py"),
             )
             batch_embed(**kwargs)
             first = json.loads(marker.read_text())

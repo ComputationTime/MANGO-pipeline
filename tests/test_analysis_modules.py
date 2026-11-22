@@ -10,7 +10,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "workflow" / "scripts" / "analysis"
+SCRIPTS = ROOT / "scripts" / "analysis"
 sys.path.insert(0, str(SCRIPTS))
 
 
@@ -290,6 +290,8 @@ class AnalysisModuleTests(unittest.TestCase):
         finally:
             plot_genes.pc.save = original_save
         self.assertEqual(captured["scales"], ["log", "log", "log"])
+        with Image.open(self.root / "fig4.png") as image:
+            self.assertGreater(image.size[0], image.size[1] * 0.8)
         self.assertEqual(
             captured["ylabels"][2], plot_genes.SPECIES_YLABEL
         )
@@ -299,7 +301,10 @@ class AnalysisModuleTests(unittest.TestCase):
         for figure in ("fig1.png", "fig3.png", "fig4.png", "fig5.png", "fig6.png"):
             self.assertGreater((self.root / figure).stat().st_size, 0)
         self.assertFalse((self.root / "fig1_subplots").exists())
-        for figure in ("fig3.png", "fig4.png", "fig5.png", "fig6.png"):
+        # The germline figure is ONE violin plot with every embedder on it, so it
+        # has no per-panel exports.
+        self.assertFalse((self.root / "fig4_subplots").exists())
+        for figure in ("fig3.png", "fig5.png", "fig6.png"):
             subplot_dir = self.root / f"{Path(figure).stem}_subplots"
             subplot_paths = sorted(subplot_dir.glob("*.png"))
             self.assertTrue(subplot_paths)

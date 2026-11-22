@@ -1,7 +1,0 @@
-experiment_root: artifacts/experiments/legacy_adapter_affinity_v1
-reference_root: artifacts/experiments/affinity_improvement_v1
-binding_root: artifacts/experiments/mango_binding_affinity
-selection_root: artifacts/experiments/affinity_short_v3
-seeds: [0, 1, 2]
-arms: [decoder, decoder_shuffled, iglm_continue]
-parity_tolerance: 0.000003

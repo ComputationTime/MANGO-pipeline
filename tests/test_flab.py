@@ -2,6 +2,7 @@
 
 import csv
 import importlib.util
+import os
 import struct
 import sys
 import tempfile
@@ -13,7 +14,7 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "workflow" / "scripts" / "analysis"
+SCRIPTS = ROOT / "scripts" / "analysis"
 sys.path.insert(0, str(SCRIPTS))
 
 
@@ -28,7 +29,7 @@ def load(name):
 
 flab = load("flab_common")
 plot_flab = load("plot_flab")
-HER2 = Path("/Users/tanokri/Desktop/MANGO_BINDING_DATA/HER2_data.csv")
+HER2 = Path(os.environ.get("MANGO_HER2_DATA", "HER2_data.csv"))
 
 
 class AveragePerplexityTests(unittest.TestCase):
@@ -78,7 +79,7 @@ class AveragePerplexityTests(unittest.TestCase):
 class PrepareTests(unittest.TestCase):
     def test_trastuzumab_splits_off_the_linker(self):
         if not HER2.is_file():
-            self.skipTest("AlphaSeq HER2 table is not on this machine")
+            self.skipTest("set MANGO_HER2_DATA to the AlphaSeq HER2 table to run this test")
         with HER2.open(newline="") as handle:
             row = next(csv.DictReader(handle))
         heavy, light = flab.split_scfv(row["mata_sequence"])

@@ -1,22 +1,13 @@
 # =============================================================================
-# Full MANGO workflow environment.
-# =============================================================================
-# One environment that can drive Snakemake and the first milestone (fetch,
-# process, one-hot + AbLang2 embedding, train, evaluate, predict, generate)
-# without per-rule Conda environments. It also carries a few dependencies for
-# deferred embedders so those implementations can be tested independently.
+# MANGO environment.
 #
 #   conda env create -f environment.yaml
 #   conda activate mango
-#   snakemake -s workflow/Snakefile --cores 8            # runs in this env
 #
-# (The per-rule envs in workflow/envs/*.yaml are the minimal, isolated
-#  alternative used when you run Snakemake with --sdm conda. This file is the
-#  batteries-included superset.)
-#
-# Note: pyrosetta (needed only for the PyRosetta_PRE antigen method, not built
-# yet) is intentionally omitted -- it needs its own channel/license and conflicts
-# with parts of this stack; install it in a separate env when that method lands.
+# Antigen embedders and analysis scorers with conflicting dependencies have
+# their own minimal environments in envs/*.yaml. PyRosetta needs its own
+# channel/license and is intentionally omitted here.
+# =============================================================================
 name: mango
 channels:
   - conda-forge
@@ -30,7 +21,9 @@ dependencies:
   - biopython>=1.81
   - matplotlib-base>=3.8
   - einops
-  - snakemake-minimal>=9,<10
+  - pyyaml
+  - seaborn
+  - scipy
   - pip
   - pip:
       - fair-esm          # ESM2 antigen embeddings (auto-downloads weights)

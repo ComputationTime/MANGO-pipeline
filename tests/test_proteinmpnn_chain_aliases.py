@@ -1,4 +1,4 @@
-from workflow.scripts.embed_antigen_proteinmpnn import alias_proteinmpnn_chains
+from scripts.embedding.embed_antigen_proteinmpnn import alias_proteinmpnn_chains
 
 
 def test_aliases_multichar_author_chain_ids():

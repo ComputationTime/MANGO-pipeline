@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "workflow" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import embed_antigen_biopython

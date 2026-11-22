@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from Bio.PDB import Atom, Chain, MMCIFIO, Model, Residue, Structure
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'workflow/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts' / 'embedding'))
 from embed_antigen_esm3 import antigen_structure, esm3
 from embed_batch import batch_embed, _can_reuse
 from prefetch_embedder_weights import _esm3
@@ -156,7 +156,7 @@ class ESM3StructureTests(unittest.TestCase):
                 kind='antigen', tag='esm3_structure', method='esm3',
                 spec=dict(model_name='esm3-sm-open-v1', representation='sequence_structure'),
                 seq_source='resolved', splits=['train'],
-                implementation=str(Path(__file__).resolve().parents[1] / 'workflow/scripts/embed_antigen_esm3.py'))
+                implementation=str(Path(__file__).resolve().parents[1] / 'scripts/embedding/embed_antigen_esm3.py'))
             with patch('embed_antigen_esm3.load_runtime', return_value=self.runtime([])) as load:
                 batch_embed(**kwargs)
                 self.assertEqual(load.call_count, 1)

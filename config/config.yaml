@@ -142,8 +142,17 @@ embedders:
 # First milestone: prove the complete train/inference path with the simplest
 # antigen representation. Additional embedders remain registered above but are
 # deliberately outside the active DAG until this baseline is reliable.
+# Default set used by the master scripts when no embedder flag is given. The
+# master scripts also accept --embedders NAME [NAME ...] or --all.
 active_embedders:
   - one_hot
+  - biopython
+  - pyrosetta_pre
+  - esm2
+  - esm3
+  - esm3_structure
+  - esmif
+  - proteinmpnn
 
 # --- Model (identical for every embedder; only d_Ag_rep differs) -------------
 model:
