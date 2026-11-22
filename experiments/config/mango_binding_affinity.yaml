@@ -1,4 +1,0 @@
-experiment_root: artifacts/experiments/mango_binding_affinity
-source_dir: MANGO_BINDING_DATA
-cache_root: artifacts/experiments/openalphaseq_affinity_full_v1
-batch_size: 64

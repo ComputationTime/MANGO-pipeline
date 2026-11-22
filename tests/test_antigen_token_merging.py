@@ -9,7 +9,7 @@ import unittest
 
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workflow/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from embed_antigen_merged import (
     MERGING, antigen_merged, build_merged_embeddings, merge_tokens, merged_model_name,
 )

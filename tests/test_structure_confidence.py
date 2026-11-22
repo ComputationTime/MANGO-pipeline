@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "analysis"
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts" / "analysis"
 sys.path.insert(0, str(SCRIPTS))
 import structure_confidence_common as sc
 

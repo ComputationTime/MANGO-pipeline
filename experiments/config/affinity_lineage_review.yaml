@@ -1,7 +1,0 @@
-experiment_root: artifacts/experiments/affinity_curation_v1/lineage_review_v1
-audit_root: artifacts/experiments/affinity_curation_v1
-source_records: artifacts/data/sabdab2_v0.1.0/standardized/standardized.csv
-candidate_links: artifacts/experiments/data_inventory_v1/native_affinity_candidate_links.json
-region_caches:
-  - artifacts/experiments/antigen_conditioning_diagnostics_v1/regions.json
-  - artifacts/experiments/affinity_improvement_v1/regions.json

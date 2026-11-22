@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 
 
-PATH = Path(__file__).resolve().parents[1] / "workflow/scripts/analysis/chai_memory.py"
+PATH = Path(__file__).resolve().parents[1] / "scripts/analysis/chai_memory.py"
 spec = importlib.util.spec_from_file_location("chai_memory", PATH)
 memory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(memory)

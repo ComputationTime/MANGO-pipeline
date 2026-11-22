@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 
-SCRIPT_DIR = Path(__file__).resolve().parents[1] / "workflow" / "scripts"
+SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from process_records import (

@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "workflow" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from embed_antigen_control import antigen_control, control_matrix, control_model_name
@@ -148,7 +148,7 @@ class AntigenControlTests(unittest.TestCase):
                 kind="antigen", tag="control_constant", method="antigen_control",
                 spec={"mode": "constant", "width": 7, "tokens": 1, "seed": 3},
                 seq_source="none", splits=["train"],
-                implementation=str(SCRIPTS / "embed_antigen_control.py"),
+                implementation=str(SCRIPTS / "embedding" / "embed_antigen_control.py"),
             )
             batch_embed(**kwargs)
             kwargs["spec"] = self.matched_spec(root)

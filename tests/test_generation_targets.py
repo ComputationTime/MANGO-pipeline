@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "workflow" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 from generation_targets import select_generation_targets
 
